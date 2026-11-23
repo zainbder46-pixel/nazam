@@ -8,7 +8,7 @@ import { TaskItem } from "@/components/TaskItem";
 import { TaskDetail } from "@/components/TaskDetail";
 import { Empty, Modal, PageHeader, Segmented, Spinner } from "@/components/ui";
 import { supabase } from "@/lib/supabase/client";
-import { AREAS, addDays, cn, friendlyDate, today } from "@/lib/utils";
+import { AREAS, addDays, areasFor, cn, friendlyDate, today } from "@/lib/utils";
 import type { Area, Task, TaskList } from "@/lib/types";
 
 type View = "inbox" | "today" | "upcoming" | "all" | "done" | `list:${string}`;
@@ -26,6 +26,7 @@ export default function TasksPage() {
   const [dragId, setDragId] = useState<string | null>(null);
 
   const t0 = today();
+  const allowed = areasFor(ws?.kind);
   const roots = tasks.filter((t) => !t.parent_id);
   const filtered = useMemo(() => {
     let r = roots;
@@ -54,10 +55,19 @@ export default function TasksPage() {
     const listId = view.startsWith("list:") ? view.slice(5) : null;
     const due = view === "today" ? t0 : view === "upcoming" ? addDays(t0, 1) : null;
     const { data } = await supabase().from("tasks").insert({
-      workspace_id: ws.id, title: inline.trim(), list_id: listId, due_date: due, area: area === "all" ? "life" : area, position: Date.now(),
+      workspace_id: ws.id, title: inline.trim(), list_id: listId, due_date: due, area: area === "all" ? allowed[0] : area, position: Date.now(),
     }).select().single();
     if (data) add(data);
     setInline("");
+  };
+
+  const deleteList = async (l: TaskList) => {
+    const n = roots.filter((t) => t.list_id === l.id).length;
+    if (!confirm(`حذف قائمة «${l.name}»؟${n ? `\n${n} مهمة فيها بتنتقل لصندوق الوارد.` : ""}`)) return;
+    await supabase().from("task_lists").delete().eq("id", l.id);
+    if (view === `list:${l.id}`) setView("inbox");
+    await reloadLists();
+    tasks.filter((t) => t.list_id === l.id).forEach((t) => update(t.id, { list_id: null }));
   };
 
   const moveStatus = async (id: string, status: Task["status"]) => {
@@ -91,7 +101,7 @@ export default function TasksPage() {
 
   return (
     <div>
-      <PageHeader title="المهام" subtitle={!ws ? "" : ws.is_personal ? "مهامك الشخصية" : `مساحة ${ws.name}`}
+      <PageHeader title="المهام" subtitle={!ws ? "" : ws.is_personal ? "مهامك الشخصية — خاصة فيك" : `${ws.kind === "work" ? "💼" : "🌿"} ${ws.name}`}
         actions={<>
           <Segmented value={mode} onChange={setMode} options={[{ value: "list", label: <LayoutList size={16} /> }, { value: "board", label: <Columns3 size={16} /> }]} />
           {canEdit && <button className="btn-primary" onClick={() => setQuickAddOpen(true)}><Plus size={16} /> مهمة</button>}
@@ -117,12 +127,17 @@ export default function TasksPage() {
             {canEdit && <button className="icon-btn h-6 w-6" onClick={() => setListModal("new")}><Plus size={14} /></button>}
           </div>
           {lists.map((l) => (
-            <div key={l.id} className="group shrink-0 relative">
-              <button onClick={() => setView(`list:${l.id}`)} className={cn("w-full flex items-center gap-2.5 rounded-xl px-3 h-9 text-sm transition", view === `list:${l.id}` ? "bg-surface shadow-soft border border-line font-semibold" : "text-ink/70 hover:bg-ink/5")}>
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: l.color }} /> {l.name}
-                <span className="mr-auto text-xs text-muted group-hover:opacity-0">{roots.filter((t) => t.list_id === l.id && t.status !== "done").length || ""}</span>
+            <div key={l.id} className={cn("group shrink-0 flex items-center rounded-xl transition", view === `list:${l.id}` ? "bg-surface shadow-soft border border-line" : "hover:bg-ink/5")}>
+              <button onClick={() => setView(`list:${l.id}`)} className={cn("flex-1 min-w-0 flex items-center gap-2.5 px-3 h-9 text-sm", view === `list:${l.id}` ? "font-semibold" : "text-ink/70")}>
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: l.color }} /> <span className="truncate">{l.name}</span>
+                <span className="mr-auto text-xs text-muted lg:group-hover:hidden">{roots.filter((t) => t.list_id === l.id && t.status !== "done").length || ""}</span>
               </button>
-              {canEdit && <button onClick={() => setListModal(l)} className="hidden lg:flex absolute left-1 top-1/2 -translate-y-1/2 icon-btn h-7 w-7 opacity-0 group-hover:opacity-100"><Pencil size={12} /></button>}
+              {canEdit && (
+                <span className={cn("flex items-center pl-1", view === `list:${l.id}` ? "flex" : "hidden lg:group-hover:flex")}>
+                  <button title="تعديل" onClick={() => setListModal(l)} className="icon-btn h-7 w-7"><Pencil size={13} /></button>
+                  <button title="حذف" onClick={() => deleteList(l)} className="icon-btn h-7 w-7 hover:text-red-600"><Trash2 size={13} /></button>
+                </span>
+              )}
             </div>
           ))}
           {canEdit && <button className="lg:hidden shrink-0 btn-ghost h-9" onClick={() => setListModal("new")}><Plus size={14} /> قائمة</button>}
@@ -130,9 +145,9 @@ export default function TasksPage() {
 
         <div className="min-w-0">
           {/* فلتر المجال */}
-          <div className="flex flex-wrap gap-1.5 mb-4">
+          <div className={cn("flex flex-wrap gap-1.5 mb-4", allowed.length < 2 && "hidden")}>
             <button onClick={() => setArea("all")} className={cn("chip h-7 px-3 text-xs border", area === "all" ? "bg-ink text-bg border-transparent" : "border-line text-muted")}>الكل</button>
-            {(Object.keys(AREAS) as Area[]).map((a) => (
+            {allowed.map((a) => (
               <button key={a} onClick={() => setArea(a)} className={cn("chip h-7 px-3 text-xs border", area === a ? "text-white border-transparent" : "border-line text-muted")}
                 style={area === a ? { background: AREAS[a].color } : {}}>{AREAS[a].icon} {AREAS[a].label}</button>
             ))}
@@ -154,7 +169,7 @@ export default function TasksPage() {
                 <div key={g.key} className="mb-2">
                   {g.label && <p className={cn("px-3 pt-3 pb-1 text-xs font-semibold", g.label === "متأخرة" ? "text-red-600" : "text-muted")}>{g.label} · {g.items.length}</p>}
                   {g.items.map((t) => (
-                    <TaskItem key={t.id} task={t} members={members} canEdit={canEdit} onChange={update} onOpen={setOpen} subCount={subCount(t.id)} showArea={area === "all"} />
+                    <TaskItem key={t.id} task={t} members={members} canEdit={canEdit} onChange={update} onOpen={setOpen} subCount={subCount(t.id)} showArea={area === "all" && allowed.length > 1} />
                   ))}
                 </div>
               ))}
@@ -175,7 +190,7 @@ export default function TasksPage() {
                       {col.map((t) => (
                         <div key={t.id} draggable={canEdit} onDragStart={() => setDragId(t.id)}
                           className={cn("card p-0 cursor-grab active:cursor-grabbing", dragId === t.id && "opacity-50")}>
-                          <TaskItem task={t} members={members} canEdit={canEdit} onChange={update} onOpen={setOpen} subCount={subCount(t.id)} />
+                          <TaskItem task={t} members={members} canEdit={canEdit} onChange={update} onOpen={setOpen} subCount={subCount(t.id)} showArea={allowed.length > 1} />
                         </div>
                       ))}
                     </div>
@@ -188,7 +203,7 @@ export default function TasksPage() {
       </div>
 
       <TaskDetail task={open ? tasks.find((t) => t.id === open.id) ?? null : null} onClose={() => setOpen(null)}
-        onChange={update} onDelete={remove} lists={lists} members={members} canEdit={canEdit} allTasks={tasks} onAdd={add} />
+        onChange={update} onDelete={remove} lists={lists} members={members} canEdit={canEdit} allTasks={tasks} onAdd={add} kind={ws?.kind} />
 
       <ListModal value={listModal} onClose={() => setListModal(null)} wsId={ws?.id} onSaved={async () => { await reloadLists(); setListModal(null); }}
         onDeleted={async () => { await reloadLists(); setListModal(null); setView("all"); }} count={lists.length} />
