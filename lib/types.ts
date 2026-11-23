@@ -2,7 +2,7 @@ export type Role = "owner" | "editor" | "viewer";
 
 export type Workspace = {
   id: string; name: string; icon: string; color: string;
-  is_personal: boolean; owner_id: string; created_at: string;
+  is_personal: boolean; kind: "life" | "work"; owner_id: string; created_at: string;
   role?: Role;
 };
 
