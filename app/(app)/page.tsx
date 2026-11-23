@@ -15,7 +15,8 @@ import { cn, gregorianLong, hijri, money, monthEnd, monthStart, today, ymd } fro
 import type { Habit, HabitLog, PrayerLog, Task } from "@/lib/types";
 
 export default function TodayPage() {
-  const { ws, profile, members, lists, canEdit, tasksVersion, setQuickAddOpen, invites } = useApp();
+  const { ws, profile, members, lists, canEdit, tasksVersion, setQuickAddOpen, invites, userId } = useApp();
+  const personal = !!ws?.is_personal;
   const { tasks, update, remove, add } = useTasks(ws?.id, tasksVersion);
   const [open, setOpen] = useState<Task | null>(null);
   const city = profile?.city ?? "jeddah";
@@ -29,17 +30,11 @@ export default function TodayPage() {
   const [fin, setFin] = useState({ income: 0, expense: 0, budget: 0 });
 
   useEffect(() => {
+    if (!ws) return;
     const sb = supabase();
-    sb.from("prayer_logs").select("*").eq("date", t0).then(({ data }) => setPrayers(data ?? []));
-    sb.from("habits").select("*").eq("active", true).order("position").then(({ data }) => setHabits(data ?? []));
-    sb.from("habit_logs").select("*").eq("date", t0).then(({ data }) => setHlogs(data ?? []));
-    sb.from("quran_logs").select("pages,date,kind").eq("kind", "read").then(({ data }) => {
-      const rows = data ?? [];
-      setQuran({ today: rows.filter((r: any) => r.date === t0).reduce((s: number, r: any) => s + r.pages, 0), total: rows.reduce((s: number, r: any) => s + r.pages, 0) });
-    });
     Promise.all([
-      sb.from("transactions").select("amount,type").gte("date", monthStart()).lte("date", monthEnd()),
-      sb.from("fin_categories").select("monthly_budget").eq("type", "expense"),
+      sb.from("transactions").select("amount,type").eq("workspace_id", ws.id).gte("date", monthStart()).lte("date", monthEnd()),
+      sb.from("fin_categories").select("monthly_budget").eq("workspace_id", ws.id).eq("type", "expense"),
     ]).then(([tx, cats]) => {
       const rows = tx.data ?? [];
       setFin({
@@ -48,10 +43,20 @@ export default function TodayPage() {
         budget: (cats.data ?? []).reduce((s: number, c: any) => s + Number(c.monthly_budget ?? 0), 0),
       });
     });
-  }, [t0]);
+    if (!ws.is_personal) return;
+    sb.from("prayer_logs").select("*").eq("date", t0).then(({ data }) => setPrayers(data ?? []));
+    sb.from("habits").select("*").eq("active", true).order("position").then(({ data }) => setHabits(data ?? []));
+    sb.from("habit_logs").select("*").eq("date", t0).then(({ data }) => setHlogs(data ?? []));
+    sb.from("quran_logs").select("pages,date,kind").eq("kind", "read").then(({ data }) => {
+      const rows = data ?? [];
+      setQuran({ today: rows.filter((r: any) => r.date === t0).reduce((s: number, r: any) => s + r.pages, 0), total: rows.reduce((s: number, r: any) => s + r.pages, 0) });
+    });
+  }, [t0, ws]);
 
   const todays = useMemo(() => tasks.filter((t) => !t.parent_id && t.status !== "done" && t.due_date && t.due_date <= t0)
     .sort((a, b) => Number(a.due_date === t0) - Number(b.due_date === t0) || b.priority - a.priority), [tasks, t0]);
+  const mine = useMemo(() => tasks.filter((t) => !t.parent_id && t.status !== "done" && t.assignee_id === userId && !(t.due_date && t.due_date <= t0)), [tasks, userId, t0]);
+  const doing = useMemo(() => tasks.filter((t) => !t.parent_id && t.status === "doing"), [tasks]);
   const doneToday = tasks.filter((t) => t.status === "done" && t.completed_at && ymd(new Date(t.completed_at)) === t0).length;
   const taskPct = todays.length + doneToday ? (doneToday / (todays.length + doneToday)) * 100 : 0;
 
@@ -90,7 +95,7 @@ export default function TodayPage() {
           <div>
             <p className="text-white/70 text-sm">{gregorianLong()} · {hijri()}</p>
             <h1 className="text-2xl sm:text-3xl font-bold mt-1">{greet}، {profile?.full_name?.split(" ")[0] ?? ""} 👋</h1>
-            <p className="text-white/80 mt-2 text-sm">{todays.length ? `عندك ${todays.length} مهمة اليوم` : "ما عندك مهام متبقية اليوم"} · {CITIES[city]?.name}</p>
+            <p className="text-white/80 mt-2 text-sm">{ws?.icon} {ws?.name} · {todays.length ? `عندك ${todays.length} مهمة اليوم` : "ما عندك مهام متبقية اليوم"}{personal ? ` · ${CITIES[city]?.name}` : ""}</p>
           </div>
           <div className="text-left">
             <p className="text-white/70 text-xs">الصلاة القادمة · {next.name}</p>
@@ -99,14 +104,14 @@ export default function TodayPage() {
         </div>
       </section>
 
-      {/* الصلوات */}
-      <section className="card p-5 anim-rise" style={{ animationDelay: "40ms" }}>
+      {/* الصلوات — في «حياتي» فقط */}
+      {personal && <section className="card p-5 anim-rise" style={{ animationDelay: "40ms" }}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">🕌 صلوات اليوم</h2>
           <span className="text-xs text-muted">{prayers.length}/5 مسجّلة</span>
         </div>
         <PrayerTracker date={t0} city={city} logs={prayers} onChange={setPrayers} compact />
-      </section>
+      </section>}
 
       <div className="grid lg:grid-cols-[1.4fr_1fr] gap-6">
         {/* مهام اليوم */}
@@ -121,12 +126,23 @@ export default function TodayPage() {
             <Link href="/tasks" className="icon-btn"><ArrowLeft size={18} /></Link>
           </div>
           {todays.length === 0 ? <Empty icon="🌤️" title="يومك مرتب" hint="اضغط N لإضافة مهمة" /> :
-            todays.slice(0, 10).map((t) => <TaskItem key={t.id} task={t} members={members} canEdit={canEdit} onChange={update} onOpen={setOpen} />)}
+            todays.slice(0, 10).map((t) => <TaskItem key={t.id} task={t} members={members} canEdit={canEdit} onChange={update} onOpen={setOpen} showArea={personal} />)}
         </section>
 
         <div className="space-y-6">
+          {!personal && (
+            <section className="card p-2 anim-rise" style={{ animationDelay: "120ms" }}>
+              <h2 className="font-semibold px-3 pt-3 pb-1">🙋 مسندة لك</h2>
+              {mine.length === 0 ? <p className="text-sm text-muted px-3 pb-3">ما فيه مهام مسندة لك غير مهام اليوم</p> :
+                mine.slice(0, 6).map((t) => <TaskItem key={t.id} task={t} members={members} canEdit={canEdit} onChange={update} onOpen={setOpen} showArea={false} />)}
+              {doing.length > 0 && <>
+                <h2 className="font-semibold px-3 pt-3 pb-1">⏳ قيد العمل</h2>
+                {doing.slice(0, 6).map((t) => <TaskItem key={t.id} task={t} members={members} canEdit={canEdit} onChange={update} onOpen={setOpen} showArea={false} />)}
+              </>}
+            </section>
+          )}
           {/* العادات */}
-          <section className="card p-5 anim-rise" style={{ animationDelay: "120ms" }}>
+          {personal && <section className="card p-5 anim-rise" style={{ animationDelay: "120ms" }}>
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold flex items-center gap-2"><Flame size={18} className="text-gold" /> عادات اليوم</h2>
               <span className="text-xs text-muted">{habits.filter(habitDone).length}/{habits.length}</span>
@@ -139,21 +155,21 @@ export default function TodayPage() {
                 </button>
               ))}
             </div>
-          </section>
+          </section>}
 
           {/* القرآن */}
-          <Link href="/faith" className="card p-5 flex items-center gap-4 hover:-translate-y-0.5 transition anim-rise" style={{ animationDelay: "160ms" }}>
+          {personal && <Link href="/faith" className="card p-5 flex items-center gap-4 hover:-translate-y-0.5 transition anim-rise" style={{ animationDelay: "160ms" }}>
             <Ring value={(quran.today / goal) * 100} color="rgb(var(--gold))">{quran.today}/{goal}</Ring>
             <div className="flex-1">
               <h2 className="font-semibold flex items-center gap-2"><BookOpen size={16} /> ورد القرآن</h2>
               <p className="text-xs text-muted mt-1">الختمة الحالية: صفحة {quran.total % QURAN_PAGES} من {QURAN_PAGES} · {Math.floor(quran.total / QURAN_PAGES)} ختمة</p>
               <Progress value={((quran.total % QURAN_PAGES) / QURAN_PAGES) * 100} color="rgb(var(--gold))" className="mt-2" />
             </div>
-          </Link>
+          </Link>}
 
           {/* المالية */}
           <Link href="/finance" className="card p-5 block hover:-translate-y-0.5 transition anim-rise" style={{ animationDelay: "200ms" }}>
-            <h2 className="font-semibold flex items-center gap-2 mb-3"><Wallet size={16} /> هذا الشهر</h2>
+            <h2 className="font-semibold flex items-center gap-2 mb-3"><Wallet size={16} /> مالية {ws?.name} هذا الشهر</h2>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div><p className="text-[11px] text-muted">الدخل</p><p className="font-semibold text-green-600 text-sm">{money(fin.income, cur)}</p></div>
               <div><p className="text-[11px] text-muted">المصروف</p><p className="font-semibold text-red-600 text-sm">{money(fin.expense, cur)}</p></div>
@@ -170,7 +186,7 @@ export default function TodayPage() {
       </div>
 
       <TaskDetail task={open ? tasks.find((t) => t.id === open.id) ?? null : null} onClose={() => setOpen(null)}
-        onChange={update} onDelete={remove} lists={lists} members={members} canEdit={canEdit} allTasks={tasks} onAdd={add} />
+        onChange={update} onDelete={remove} lists={lists} members={members} canEdit={canEdit} allTasks={tasks} onAdd={add} kind={ws?.kind} />
     </div>
   );
 }
