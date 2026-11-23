@@ -5,7 +5,7 @@ import { CalendarDays, Flag, Repeat } from "lucide-react";
 import { useApp } from "./AppProvider";
 import { Modal } from "./ui";
 import { supabase } from "@/lib/supabase/client";
-import { AREAS, PRIORITY, RECURRENCE, addDays, cn, friendlyDate, parseQuick, today } from "@/lib/utils";
+import { AREAS, PRIORITY, RECURRENCE, addDays, areasFor, cn, friendlyDate, parseQuick, today } from "@/lib/utils";
 import type { Area, Recurrence } from "@/lib/types";
 
 export function QuickAdd() {
@@ -19,14 +19,15 @@ export function QuickAdd() {
   const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
 
+  const allowed = areasFor(ws?.kind);
   useEffect(() => {
-    if (quickAddOpen) { setText(""); setDue(null); setPriority(0); setRec("none"); setTimeout(() => ref.current?.focus(), 30); }
-  }, [quickAddOpen]);
+    if (quickAddOpen) { setText(""); setDue(null); setPriority(0); setRec("none"); setArea(allowed[0]); setTimeout(() => ref.current?.focus(), 30); }
+  }, [quickAddOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const parsed = parseQuick(text);
   const finalDue = due ?? parsed.due;
   const finalPriority = priority || parsed.priority;
-  const finalArea = parsed.area ?? area;
+  const finalArea = parsed.area && allowed.includes(parsed.area) ? parsed.area : allowed.includes(area) ? area : allowed[0];
 
   async function save(keepOpen = false) {
     if (!ws || !parsed.title) return;
@@ -47,10 +48,10 @@ export function QuickAdd() {
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(e.shiftKey); } }}
           placeholder="وش في بالك؟ مثال: أرسل العرض للعميل بكرة !3 #عمل"
           className="w-full text-lg bg-transparent outline-none placeholder:text-muted py-2" />
-        <p className="text-[11px] text-muted mb-4">اكتب «اليوم/بكرة» للتاريخ، ‎!1-3‎ للأولوية، ‎#عمل #دين #مالية‎ للمجال · Enter للحفظ · Shift+Enter حفظ وإضافة أخرى</p>
+        <p className="text-[11px] text-muted mb-4">اكتب «اليوم/بكرة» للتاريخ، ‎!1-3‎ للأولوية{allowed.length > 1 ? "، ‎#دين #مالية #صحة‎ للمجال" : ""} · Enter للحفظ · Shift+Enter حفظ وإضافة أخرى</p>
 
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {(Object.keys(AREAS) as Area[]).map((a) => (
+        <div className={cn("flex flex-wrap gap-1.5 mb-3", allowed.length < 2 && "hidden")}>
+          {allowed.map((a) => (
             <button key={a} onClick={() => setArea(a)}
               className={cn("chip border h-7 px-2.5 text-xs", finalArea === a ? "border-transparent text-white" : "border-line text-muted")}
               style={finalArea === a ? { background: AREAS[a].color } : {}}>
