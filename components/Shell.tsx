@@ -50,7 +50,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const lifeSpaces = workspaces.filter((w) => w.kind === "life");
   const workSpaces = workspaces.filter((w) => w.kind !== "life");
   const kindLabel = !ws ? "" : ws.is_personal ? "حياتي · خاصة فيك" : `${ws.kind === "life" ? "حياة" : "عمل"} · ${ws.role === "owner" ? "مالك" : ws.role === "editor" ? "محرر" : "مشاهد"}`;
+  const bare = path === "/q";
   const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
+
+  if (bare) return <>{children}<ActionToast /></>;
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
