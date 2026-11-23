@@ -3,16 +3,17 @@
 import { useEffect, useState } from "react";
 import { Trash2, X, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { AREAS, PRIORITY, RECURRENCE, cn } from "@/lib/utils";
+import { AREAS, PRIORITY, RECURRENCE, areasFor, cn } from "@/lib/utils";
 import type { Area, Member, Recurrence, Task, TaskList } from "@/lib/types";
 import { Drawer, AutoTextarea } from "./ui";
 import { Checkbox, completeTask } from "./TaskItem";
 
-export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, canEdit, allTasks, onAdd }: {
+export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, canEdit, allTasks, onAdd, kind }: {
   task: Task | null; onClose: () => void; onChange: (id: string, p: Partial<Task>) => void;
   onDelete: (id: string) => void; lists: TaskList[]; members: Member[]; canEdit: boolean;
-  allTasks: Task[]; onAdd: (t: Task) => void;
+  allTasks: Task[]; onAdd: (t: Task) => void; kind?: "life" | "work";
 }) {
+  const allowed = areasFor(kind);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [sub, setSub] = useState("");
@@ -107,10 +108,10 @@ export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, 
           </div>
         </div>
 
-        <div>
+        <div className={cn(allowed.length < 2 && "hidden")}>
           <label className="label">المجال</label>
           <div className="flex flex-wrap gap-1.5">
-            {(Object.keys(AREAS) as Area[]).map((a) => (
+            {allowed.map((a) => (
               <button key={a} disabled={!canEdit} onClick={() => patch({ area: a })}
                 className={cn("chip border h-7 px-2.5 text-xs", task.area === a ? "text-white border-transparent" : "border-line text-muted")}
                 style={task.area === a ? { background: AREAS[a].color } : {}}>{AREAS[a].icon} {AREAS[a].label}</button>
