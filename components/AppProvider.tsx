@@ -93,6 +93,12 @@ export function AppProvider({ userId, email, children }: { userId: string; email
     loadMembers();
   }, [wsId, reloadLists, loadMembers]);
 
+  useEffect(() => {
+    const on = () => reloadLists();
+    window.addEventListener("nz:refresh", on);
+    return () => window.removeEventListener("nz:refresh", on);
+  }, [reloadLists]);
+
   const updateProfile = useCallback(async (p: Partial<Profile>) => {
     setProfile((cur) => (cur ? { ...cur, ...p } : cur));
     await sb.from("profiles").update(p).eq("id", userId);
