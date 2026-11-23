@@ -22,12 +22,14 @@ export async function GET(req: Request) {
     return Response.json(data ?? [], { headers: { "cache-control": "no-store" } });
   }
 
-  const a = Number(toEn(get("a") ?? ""));
+  // يقبل «&a=25» وكذلك «=&a25» (لو انكتبت بالمقلوب من كيبورد عربي)
+  let a = Number(toEn(get("a") ?? ""));
+  if (!a) for (const [key, v] of p) { const m = toEn(key).length && /^\W*a/i.test(key) ? Number(toEn(key + v)) : 0; if (m > 0) { a = m; break; } }
   if (!a || a <= 0) {
     const got = [...p.entries()].filter(([k]) => k.replace(/[^a-z]/gi, "") !== "t").map(([k, v]) => `${k}=${v || "فاضي"}`).join(" ، ");
     return txt(`⚠️ اكتب مبلغ صحيح\nوصلني: ${got || "ولا شي"}`, 400);
   }
-  const { data, error } = await sb.rpc("quick_expense", { p_token: t, p_amount: a, p_category: get("c")?.trim() || null, p_note: get("n") || null });
+  const { data, error } = await sb.rpc("quick_expense", { p_token: t, p_amount: a, p_category: get("c")?.replace(/=+$/, "").trim() || null, p_note: get("n") || null });
   if (error) return txt(error.message.includes("bad token") ? "⚠️ الرمز غلط — انسخ الرابط من جديد" : "⚠️ ما انحفظت: " + error.message, 400);
   const d = data as { category: string; total: number; currency: string };
   return txt(`✅ ${a} ${d.currency}${d.category ? " · " + d.category : ""}\nمصروفك اليوم: ${Number(d.total)} ${d.currency}`);
