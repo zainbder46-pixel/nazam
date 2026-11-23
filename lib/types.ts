@@ -30,6 +30,13 @@ export type Task = {
   priority: number; area: Area; due_date: string | null; due_time: string | null;
   recurrence: Recurrence; assignee_id: string | null; position: number;
   completed_at: string | null; created_by: string | null; created_at: string;
+  kind?: "task" | "meeting"; location?: string | null; end_time?: string | null; remind_before?: number | null;
+};
+
+export type Attendee = { task_id: string; user_id: string; workspace_id: string; response: "invited" | "yes" | "no" | "maybe" };
+export type Message = {
+  id: string; workspace_id: string; user_id: string; body: string; task_id: string | null;
+  reply_to: string | null; mentions: string[]; edited_at: string | null; created_at: string;
 };
 
 export type BlockType = "p" | "h1" | "h2" | "h3" | "todo" | "bullet" | "number" | "quote" | "callout" | "divider";
@@ -48,7 +55,19 @@ export type Habit = { id: string; name: string; icon: string; category: string; 
 export type HabitLog = { habit_id: string; date: string; count: number };
 
 export type Category = { id: string; name: string; type: "expense" | "income"; icon: string; color: string; monthly_budget: number | null };
-export type Transaction = { id: string; date: string; amount: number; type: "expense" | "income"; category_id: string | null; note: string | null };
+export type Transaction = {
+  id: string; date: string; amount: number; type: "expense" | "income" | "transfer"; category_id: string | null; note: string | null;
+  account_id?: string | null; to_account_id?: string | null; created_at?: string;
+};
+export type Wallet = {
+  id: string; workspace_id: string; name: string; icon: string; color: string; note: string | null;
+  monthly_amount: number | null; monthly_day: number | null; archived: boolean; position: number;
+};
+export type AccountType = "bank" | "cash" | "card" | "savings";
+export type Account = {
+  id: string; workspace_id: string; wallet_id: string; name: string; type: AccountType;
+  opening_balance: number; is_default: boolean; position: number; balance?: number;
+};
 export type Obligation = {
   id: string; name: string; kind: "bill" | "installment" | "debt_owed" | "debt_lent";
   amount: number; total_amount: number | null; paid_amount: number; due_day: number | null;
