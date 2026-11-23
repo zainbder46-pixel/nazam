@@ -14,6 +14,16 @@ type Tab = "prayer" | "quran" | "habits" | "fasting";
 
 export default function FaithPage() {
   const [tab, setTab] = useState<Tab>("prayer");
+  const { ws, workspaces, setWsId } = useApp();
+  const life = workspaces.find((w) => w.is_personal);
+  if (ws && !ws.is_personal) return (
+    <div className="max-w-md mx-auto text-center py-20">
+      <p className="text-5xl mb-4">🕌</p>
+      <h1 className="text-xl font-bold">العبادات خاصة فيك</h1>
+      <p className="text-sm text-muted mt-2">تظهر في «{life?.name ?? "حياتي"}» فقط، وما يشوفها أحد في مساحات العمل أو المساحات المشتركة.</p>
+      {life && <button className="btn-primary mt-6" onClick={() => setWsId(life.id)}>انتقل إلى {life.icon} {life.name}</button>}
+    </div>
+  );
   return (
     <div>
       <PageHeader title="العبادات" subtitle={hijri()} actions={
