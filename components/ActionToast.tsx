@@ -49,7 +49,7 @@ export function ActionToast() {
   useEffect(() => {
     const onAction = (e: Event) => {
       const { label, celebrate } = (e as CustomEvent).detail as { label: string; celebrate?: Celebration };
-      show({ key: Date.now(), label, celebrate, praise: PRAISE[Math.floor(Math.random() * PRAISE.length)] }, celebrate ? 6000 : 5000);
+      show({ key: Date.now(), label, celebrate, praise: PRAISE[Math.floor(Math.random() * PRAISE.length)] }, 8000);
       if (celebrate) {
         chime();
         const x = celebrate.x ?? window.innerWidth / 2, y = celebrate.y ?? window.innerHeight / 2;
@@ -90,7 +90,9 @@ export function ActionToast() {
       )))}
 
       {toast && (
-        <div key={toast.key} className="toast fixed z-[60] left-1/2 bottom-24 lg:bottom-8 w-[calc(100%-2rem)] max-w-md">
+        <div key={toast.key} className="toast fixed z-[60] left-1/2 bottom-24 lg:bottom-8 w-[calc(100%-2rem)] max-w-md"
+          onMouseEnter={() => { if (timer.current) clearTimeout(timer.current); }}
+          onMouseLeave={() => { timer.current = setTimeout(() => setToast(null), 3000); }}>
           <div className={toast.celebrate ? "card p-4 border-brand/40 shadow-2xl" : "card px-4 py-3 shadow-2xl"}>
             <div className="flex items-center gap-3">
               {toast.celebrate ? <span className="text-3xl anim-check">🎉</span> : toast.undone ? <span className="text-xl">↩️</span> : null}
