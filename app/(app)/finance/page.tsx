@@ -12,8 +12,9 @@ import type { Category, Goal, Obligation, Transaction } from "@/lib/types";
 type Tab = "overview" | "budget" | "obligations" | "goals";
 
 export default function FinancePage() {
-  const { profile } = useApp();
+  const { profile, ws, canEdit } = useApp();
   const cur = profile?.currency ?? "ر.س";
+  const wsId = ws?.id ?? "";
   const [tab, setTab] = useState<Tab>("overview");
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [cats, setCats] = useState<Category[]>([]);
@@ -22,12 +23,12 @@ export default function FinancePage() {
   const [goals, setGoals] = useState<Goal[]>([]);
 
   const from = ymd(month), to = ymd(new Date(month.getFullYear(), month.getMonth() + 1, 0));
-  const loadTx = () => supabase().from("transactions").select("*").gte("date", from).lte("date", to).order("date", { ascending: false }).order("created_at", { ascending: false }).then(({ data }) => setTx(data ?? []));
-  const loadCats = () => supabase().from("fin_categories").select("*").order("created_at").then(({ data }) => setCats(data ?? []));
-  const loadObl = () => supabase().from("obligations").select("*").eq("active", true).order("created_at").then(({ data }) => setObl(data ?? []));
-  const loadGoals = () => supabase().from("savings_goals").select("*").order("created_at").then(({ data }) => setGoals(data ?? []));
-  useEffect(() => { loadCats(); loadObl(); loadGoals(); }, []);
-  useEffect(() => { loadTx(); }, [from]); // eslint-disable-line react-hooks/exhaustive-deps
+  const loadTx = () => wsId && supabase().from("transactions").select("*").eq("workspace_id", wsId).gte("date", from).lte("date", to).order("date", { ascending: false }).order("created_at", { ascending: false }).then(({ data }) => setTx(data ?? []));
+  const loadCats = () => wsId && supabase().from("fin_categories").select("*").eq("workspace_id", wsId).order("created_at").then(({ data }) => setCats(data ?? []));
+  const loadObl = () => wsId && supabase().from("obligations").select("*").eq("workspace_id", wsId).eq("active", true).order("created_at").then(({ data }) => setObl(data ?? []));
+  const loadGoals = () => wsId && supabase().from("savings_goals").select("*").eq("workspace_id", wsId).order("created_at").then(({ data }) => setGoals(data ?? []));
+  useEffect(() => { loadCats(); loadObl(); loadGoals(); }, [wsId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadTx(); }, [from, wsId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const income = tx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const expense = tx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
@@ -35,7 +36,7 @@ export default function FinancePage() {
 
   return (
     <div>
-      <PageHeader title="المالية" subtitle="مصاريفك ودخلك والتزاماتك وأهدافك" actions={
+      <PageHeader title="المالية" subtitle={ws ? `${ws.icon} مالية «${ws.name}» — منفصلة عن باقي المساحات${ws.is_personal ? " وخاصة فيك" : ""}` : ""} actions={
         <Segmented value={tab} onChange={setTab} options={[{ value: "overview", label: "نظرة عامة" }, { value: "budget", label: "الميزانية" }, { value: "obligations", label: "الالتزامات" }, { value: "goals", label: "الادخار" }]} />
       } />
 
@@ -47,16 +48,17 @@ export default function FinancePage() {
         </div>
       )}
 
-      {tab === "overview" && <Overview cats={cats} tx={tx} income={income} expense={expense} cur={cur} reload={loadTx} month={month} />}
-      {tab === "budget" && <Budget cats={cats} tx={tx} cur={cur} reload={loadCats} />}
-      {tab === "obligations" && <Obligations items={obl} cur={cur} reload={loadObl} cats={cats} />}
-      {tab === "goals" && <Goals items={goals} cur={cur} reload={loadGoals} />}
+      {!canEdit && <p className="card px-4 py-3 mb-5 text-sm text-muted">👀 صلاحيتك في هذي المساحة مشاهدة فقط</p>}
+      {tab === "overview" && <Overview cats={cats} tx={tx} income={income} expense={expense} cur={cur} reload={loadTx} month={month} wsId={wsId} />}
+      {tab === "budget" && <Budget cats={cats} tx={tx} cur={cur} reload={loadCats} wsId={wsId} />}
+      {tab === "obligations" && <Obligations items={obl} cur={cur} reload={loadObl} cats={cats} wsId={wsId} />}
+      {tab === "goals" && <Goals items={goals} cur={cur} reload={loadGoals} wsId={wsId} />}
     </div>
   );
 }
 
 /* ---------------- نظرة عامة + إضافة عملية ---------------- */
-function Overview({ cats, tx, income, expense, cur, reload, month }: { cats: Category[]; tx: Transaction[]; income: number; expense: number; cur: string; reload: () => void; month: Date }) {
+function Overview({ cats, tx, income, expense, cur, reload, month, wsId }: { cats: Category[]; tx: Transaction[]; income: number; expense: number; cur: string; reload: () => void; month: Date; wsId: string }) {
   const [type, setType] = useState<"expense" | "income">("expense");
   const [amount, setAmount] = useState("");
   const [cat, setCat] = useState("");
@@ -68,7 +70,7 @@ function Overview({ cats, tx, income, expense, cur, reload, month }: { cats: Cat
 
   const add = async () => {
     const n = Number(amount); if (!n || n <= 0) return;
-    await supabase().from("transactions").insert({ type, amount: n, category_id: cat || null, note: note || null, date });
+    await supabase().from("transactions").insert({ workspace_id: wsId, type, amount: n, category_id: cat || null, note: note || null, date });
     setAmount(""); setNote(""); reload();
   };
 
@@ -183,7 +185,7 @@ function Overview({ cats, tx, income, expense, cur, reload, month }: { cats: Cat
 
 /* ---------------- الميزانية ---------------- */
 const CAT_COLORS = ["#ea580c", "#2563eb", "#7c3aed", "#db2777", "#dc2626", "#0891b2", "#16a34a", "#b45309", "#64748b"];
-function Budget({ cats, tx, cur, reload }: { cats: Category[]; tx: Transaction[]; cur: string; reload: () => void }) {
+function Budget({ cats, tx, cur, reload, wsId }: { cats: Category[]; tx: Transaction[]; cur: string; reload: () => void; wsId: string }) {
   const [modal, setModal] = useState(false);
   const [name, setName] = useState(""); const [icon, setIcon] = useState("📦"); const [type, setType] = useState<"expense" | "income">("expense");
   const exp = cats.filter((c) => c.type === "expense");
@@ -196,7 +198,7 @@ function Budget({ cats, tx, cur, reload }: { cats: Category[]; tx: Transaction[]
   };
   const add = async () => {
     if (!name.trim()) return;
-    await supabase().from("fin_categories").insert({ name: name.trim(), icon, type, color: CAT_COLORS[cats.length % CAT_COLORS.length] });
+    await supabase().from("fin_categories").insert({ workspace_id: wsId, name: name.trim(), icon, type, color: CAT_COLORS[cats.length % CAT_COLORS.length] });
     setName(""); setModal(false); reload();
   };
 
@@ -242,7 +244,7 @@ function Budget({ cats, tx, cur, reload }: { cats: Category[]; tx: Transaction[]
 /* ---------------- الالتزامات والديون ---------------- */
 const KINDS = { bill: { l: "فاتورة شهرية", i: "🧾" }, installment: { l: "قسط", i: "🏦" }, debt_owed: { l: "دين علي", i: "🔻" }, debt_lent: { l: "دين لي", i: "🔺" } } as const;
 
-function Obligations({ items, cur, reload, cats }: { items: Obligation[]; cur: string; reload: () => void; cats: Category[] }) {
+function Obligations({ items, cur, reload, cats, wsId }: { items: Obligation[]; cur: string; reload: () => void; cats: Category[]; wsId: string }) {
   const [modal, setModal] = useState(false);
   const [f, setF] = useState({ name: "", kind: "bill" as Obligation["kind"], amount: "", total: "", due_day: "", counterparty: "" });
   const [pay, setPay] = useState<Obligation | null>(null);
@@ -258,7 +260,7 @@ function Obligations({ items, cur, reload, cats }: { items: Obligation[]; cur: s
   const add = async () => {
     if (!f.name.trim()) return;
     await supabase().from("obligations").insert({
-      name: f.name.trim(), kind: f.kind, amount: Number(f.amount || 0), total_amount: f.total ? Number(f.total) : null,
+      workspace_id: wsId, name: f.name.trim(), kind: f.kind, amount: Number(f.amount || 0), total_amount: f.total ? Number(f.total) : null,
       due_day: f.due_day ? Number(f.due_day) : null, counterparty: f.counterparty || null,
     });
     setF({ name: "", kind: "bill", amount: "", total: "", due_day: "", counterparty: "" }); setModal(false); reload();
@@ -273,7 +275,7 @@ function Obligations({ items, cur, reload, cats }: { items: Obligation[]; cur: s
     if (logTx) {
       const isIncome = pay.kind === "debt_lent";
       const cat = cats.find((c) => c.type === (isIncome ? "income" : "expense") && c.name.includes(isIncome ? "إضافي" : "سكن")) ?? cats.find((c) => c.type === (isIncome ? "income" : "expense"));
-      await sb.from("transactions").insert({ type: isIncome ? "income" : "expense", amount: n, category_id: cat?.id ?? null, note: `${KINDS[pay.kind].l}: ${pay.name}`, date: today() });
+      await sb.from("transactions").insert({ workspace_id: wsId, type: isIncome ? "income" : "expense", amount: n, category_id: cat?.id ?? null, note: `${KINDS[pay.kind].l}: ${pay.name}`, date: today() });
     }
     setPay(null); reload();
   };
@@ -352,7 +354,7 @@ function Obligations({ items, cur, reload, cats }: { items: Obligation[]; cur: s
 }
 
 /* ---------------- أهداف الادخار ---------------- */
-function Goals({ items, cur, reload }: { items: Goal[]; cur: string; reload: () => void }) {
+function Goals({ items, cur, reload, wsId }: { items: Goal[]; cur: string; reload: () => void; wsId: string }) {
   const [modal, setModal] = useState(false);
   const [f, setF] = useState({ name: "", icon: "🎯", target: "", deadline: "" });
   const [fund, setFund] = useState<Goal | null>(null);
@@ -360,7 +362,7 @@ function Goals({ items, cur, reload }: { items: Goal[]; cur: string; reload: () 
 
   const add = async () => {
     if (!f.name.trim() || !Number(f.target)) return;
-    await supabase().from("savings_goals").insert({ name: f.name.trim(), icon: f.icon, target: Number(f.target), deadline: f.deadline || null });
+    await supabase().from("savings_goals").insert({ workspace_id: wsId, name: f.name.trim(), icon: f.icon, target: Number(f.target), deadline: f.deadline || null });
     setF({ name: "", icon: "🎯", target: "", deadline: "" }); setModal(false); reload();
   };
   const addFund = async (sign: 1 | -1) => {
