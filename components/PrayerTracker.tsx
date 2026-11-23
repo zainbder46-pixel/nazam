@@ -45,21 +45,21 @@ export function PrayerTracker({ date, city, logs, onChange, compact }: {
   };
 
   return (
-    <div className={cn("grid gap-2", compact ? "grid-cols-5" : "grid-cols-1 sm:grid-cols-5")}>
-      {PRAYERS.map((p) => {
+    <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+      {PRAYERS.map((p, i) => {
         const log = logs.find((l) => l.prayer === p.key);
         const st = log ? PRAYER_STATUS[log.status] : null;
         const passed = times[p.key] < now;
         return (
           <div key={p.key} className="relative">
             <button onClick={() => setOpenKey(openKey === p.key ? null : p.key)}
-              className={cn("w-full rounded-2xl border p-3 text-center transition hover:-translate-y-0.5", st ? "border-transparent text-white" : "border-line bg-surface", !st && !passed && "opacity-60")}
+              className={cn("w-full rounded-xl sm:rounded-2xl border px-1 py-2.5 sm:p-3 text-center transition hover:-translate-y-0.5", st ? "border-transparent text-white" : "border-line bg-surface", !st && !passed && "opacity-60")}
               style={st ? { background: st.color } : {}}>
-              <p className="text-sm font-semibold">{p.name}</p>
-              <p className={cn("text-[11px] mt-0.5", st ? "text-white/80" : "text-muted")}>{st ? st.label : fmtTime(times[p.key])}</p>
+              <p className="text-[13px] sm:text-sm font-semibold">{p.name}</p>
+              <p className={cn("text-[10px] sm:text-[11px] mt-0.5 whitespace-nowrap", st ? "text-white/80" : "text-muted")}>{st ? st.label : fmtTime(times[p.key])}</p>
             </button>
             {openKey === p.key && (
-              <div className="absolute z-20 top-full mt-1 right-0 left-0 sm:left-auto sm:w-44 card p-1.5 anim-pop">
+              <div className={cn("absolute z-20 top-full mt-1 w-40 sm:w-44 card p-1.5 anim-pop", i < 3 ? "right-0" : "left-0")}>
                 {(Object.keys(PRAYER_STATUS) as PrayerStatus[]).map((k) => (
                   <button key={k} onClick={() => set(p.key, k)} className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-ink/5">
                     <span className="h-2.5 w-2.5 rounded-full" style={{ background: PRAYER_STATUS[k].color }} /> {PRAYER_STATUS[k].label}
