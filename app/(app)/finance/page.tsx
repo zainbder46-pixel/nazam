@@ -88,15 +88,15 @@ function Overview({ cats, tx, income, expense, cur, reload, month, wsId }: { cat
 
   return (
     <div className="space-y-6">
-      <div className="grid sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         {[
           { l: "الدخل", v: income, icon: TrendingUp, c: "text-green-600", bg: "bg-green-500/10" },
           { l: "المصروف", v: expense, icon: TrendingDown, c: "text-red-600", bg: "bg-red-500/10" },
           { l: "الصافي", v: income - expense, icon: Scale, c: income - expense >= 0 ? "text-brand" : "text-red-600", bg: "bg-brand/10" },
         ].map((s) => (
-          <div key={s.l} className="card p-5 flex items-center gap-4">
-            <span className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", s.bg, s.c)}><s.icon size={20} /></span>
-            <div><p className="text-xs text-muted">{s.l}</p><p className={cn("text-xl font-bold", s.c)}>{money(s.v, cur)}</p></div>
+          <div key={s.l} className="card p-3 sm:p-5 flex items-center gap-4 min-w-0">
+            <span className={cn("hidden sm:flex h-11 w-11 shrink-0 rounded-2xl items-center justify-center", s.bg, s.c)}><s.icon size={20} /></span>
+            <div className="min-w-0"><p className="text-[11px] sm:text-xs text-muted">{s.l}</p><p className={cn("text-sm sm:text-xl font-bold truncate", s.c)}>{money(s.v, cur)}</p></div>
           </div>
         ))}
       </div>
@@ -104,7 +104,7 @@ function Overview({ cats, tx, income, expense, cur, reload, month, wsId }: { cat
       <section className="card p-4">
         <div className="flex flex-wrap items-center gap-2">
           <Segmented value={type} onChange={setType} options={[{ value: "expense", label: "مصروف" }, { value: "income", label: "دخل" }]} />
-          <input type="number" inputMode="decimal" className="input w-28" placeholder="المبلغ" value={amount} onChange={(e) => setAmount(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+          <input type="number" inputMode="decimal" className="input flex-1 min-w-[110px] sm:flex-none sm:w-28" placeholder="المبلغ" value={amount} onChange={(e) => setAmount(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
           <select className="input w-auto" value={cat} onChange={(e) => setCat(e.target.value)}>
             {typeCats.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
           </select>
