@@ -23,11 +23,17 @@ export async function GET(req: Request) {
   const now = new Date();
   const msgs: Msg[] = [];
 
-  // ⏰ المهام اللي جا وقتها
+  // ⏰ المهام والاجتماعات اللي جا وقت تذكيرها (للمسؤول والمدعوين)
   const wantsTasks = new Set(subs.filter((x) => x.tasks).map((x) => x.user_id));
-  for (const t of c.tasks as { id: string; title: string; ws: string; due: string; user_id: string }[]) {
-    if (!t.user_id || !wantsTasks.has(t.user_id)) continue;
-    msgs.push({ user_id: t.user_id, key: `t:${t.id}:${t.due}`, title: `⏰ ${t.title}`, body: `${t.ws} · حان وقتها`, url: "/", tag: `t-${t.id}` });
+  const soon = (m: number) => (m >= 1440 ? `بعد ${Math.round(m / 1440)} يوم` : m >= 60 ? `بعد ${Math.round(m / 60)} ساعة` : `بعد ${m} دقيقة`);
+  for (const t of c.tasks as { id: string; title: string; kind: string; location: string | null; before: number; ws: string; due: string; at: string; users: string[] }[]) {
+    const meeting = t.kind === "meeting";
+    const when = t.before > 0 ? soon(t.before) : meeting ? "بدأ الحين" : "حان وقتها";
+    const body = [t.ws, when, meeting ? t.location : null].filter(Boolean).join(" · ");
+    for (const uid of t.users ?? []) {
+      if (!wantsTasks.has(uid)) continue;
+      msgs.push({ user_id: uid, key: `t:${t.id}:${t.due}:${t.before}:${uid}`, title: `${meeting ? "📅" : "⏰"} ${t.title}`, body, url: `/tasks?open=${t.id}`, tag: `t-${t.id}` });
+    }
   }
 
   // 🕌 أوقات الصلاة (خلال آخر 10 دقائق)
