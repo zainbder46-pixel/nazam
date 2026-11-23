@@ -298,6 +298,15 @@ function TransferModal({ open, onClose, accounts, wallets, wsId, cur, onSaved }:
   open: boolean; onClose: () => void; accounts: Account[]; wallets: Wallet[]; wsId: string; cur: string; onSaved: () => void;
 }) {
   const [from, setFrom] = useState(""); const [to, setTo] = useState(""); const [amt, setAmt] = useState(""); const [note, setNote] = useState(""); const [date, setDate] = useState(today());
+  // نبدأ من أول حساب بنكي إلى أول حساب نقد (سحب كاش هو الأكثر)
+  const [k, setK] = useState(false);
+  if (open !== k) {
+    setK(open);
+    if (open) {
+      const f = accounts.find((a) => a.type === "bank") ?? accounts[0];
+      setFrom(f?.id ?? ""); setTo((accounts.find((a) => a.type === "cash" && a.wallet_id === f?.wallet_id) ?? accounts.find((a) => a.id !== f?.id))?.id ?? "");
+    }
+  }
   const fromAcc = accounts.find((a) => a.id === from);
   const save = async () => {
     const n = Number(amt);
