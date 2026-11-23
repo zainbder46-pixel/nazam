@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "نظام — رتّب حياتك وعملك",
   description: "نظام شخصي ومشترك للمهام والصفحات والعبادات والمالية",
-  icons: { icon: "/icon.svg" },
+  icons: { icon: "/icon.svg", apple: "/apple-icon" },
   appleWebApp: { capable: true, title: "نظام", statusBarStyle: "black-translucent" },
 };
 
