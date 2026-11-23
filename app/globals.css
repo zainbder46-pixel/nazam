@@ -44,3 +44,8 @@ body { font-feature-settings: "ss01"; -webkit-font-smoothing: antialiased; }
 .anim-rise { animation: rise .25s ease-out backwards; }
 @keyframes check { 0% { transform: scale(1) } 50% { transform: scale(1.25) } 100% { transform: scale(1) } }
 .anim-check { animation: check .25s ease-out; }
+
+@keyframes confetti { 0% { transform: translate(-50%, -50%) rotate(0); opacity: 1 } 100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--r)); opacity: 0 } }
+.confetti { position: fixed; width: 7px; height: 11px; border-radius: 2px; pointer-events: none; z-index: 70; opacity: 0; animation: confetti .95s cubic-bezier(.15,.7,.35,1) both; }
+@keyframes toast-in { from { transform: translate(-50%, 16px); opacity: 0 } to { transform: translate(-50%, 0); opacity: 1 } }
+.toast { transform: translateX(-50%); animation: toast-in .25s ease-out both; }
