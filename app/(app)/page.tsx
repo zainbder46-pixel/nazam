@@ -11,7 +11,7 @@ import { PrayerTracker, useCountdown } from "@/components/PrayerTracker";
 import { Empty, Progress, Ring } from "@/components/ui";
 import { supabase } from "@/lib/supabase/client";
 import { CITIES, QURAN_PAGES } from "@/lib/prayer";
-import { cn, gregorianLong, hijri, money, monthEnd, monthStart, today, ymd } from "@/lib/utils";
+import { cn, gregorianLong, hijri, money, monthEnd, monthStart, today } from "@/lib/utils";
 import type { Habit, HabitLog, PrayerLog, Task } from "@/lib/types";
 
 export default function TodayPage() {
@@ -57,7 +57,22 @@ export default function TodayPage() {
     .sort((a, b) => Number(a.due_date === t0) - Number(b.due_date === t0) || b.priority - a.priority), [tasks, t0]);
   const mine = useMemo(() => tasks.filter((t) => !t.parent_id && t.status !== "done" && t.assignee_id === userId && !(t.due_date && t.due_date <= t0)), [tasks, userId, t0]);
   const doing = useMemo(() => tasks.filter((t) => !t.parent_id && t.status === "doing"), [tasks]);
-  const doneToday = tasks.filter((t) => t.status === "done" && t.completed_at && ymd(new Date(t.completed_at)) === t0).length;
+  // المنجز اليوم من سجل الإنجازات (يشمل المهام المتكررة)
+  const [doneToday, setDoneToday] = useState(0);
+  useEffect(() => {
+    if (!ws) return;
+    const load = () => {
+      const start = new Date(); start.setHours(0, 0, 0, 0);
+      supabase().from("task_completions").select("id", { count: "exact", head: true })
+        .eq("workspace_id", ws.id).gte("completed_at", start.toISOString())
+        .then(({ count }) => setDoneToday(count ?? 0));
+    };
+    load();
+    const later = () => setTimeout(load, 400);
+    window.addEventListener("nz:action", later);
+    window.addEventListener("nz:refresh", later);
+    return () => { window.removeEventListener("nz:action", later); window.removeEventListener("nz:refresh", later); };
+  }, [ws, tasks.length]);
   const taskPct = todays.length + doneToday ? (doneToday / (todays.length + doneToday)) * 100 : 0;
 
   const habitDone = (h: Habit) => (hlogs.find((l) => l.habit_id === h.id)?.count ?? 0) >= h.target;
