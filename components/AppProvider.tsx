@@ -42,6 +42,8 @@ export function AppProvider({ userId, email, children }: { userId: string; email
   const [invites, setInvites] = useState<Invite[]>([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [tasksVersion, setTasksVersion] = useState(0);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const reloadWorkspaces = useCallback(async () => {
     const { data } = await sb.from("workspace_members").select("role, workspaces(*)").eq("user_id", userId);
@@ -115,5 +117,7 @@ export function AppProvider({ userId, email, children }: { userId: string; email
     quickAddOpen, setQuickAddOpen, tasksVersion, bumpTasks: () => setTasksVersion((v) => v + 1),
   };
 
+  // نعرض بعد التحميل في المتصفح فقط عشان الوقت والتاريخ يكونون بتوقيت جهازك
+  if (!mounted) return null;
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }
