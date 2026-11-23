@@ -46,9 +46,9 @@ export function QuickAdd() {
       <div className="pt-3">
         <input ref={ref} value={text} onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(e.shiftKey); } }}
-          placeholder="وش في بالك؟ مثال: أرسل العرض للعميل بكرة !3 #عمل"
+          placeholder="وش في بالك؟"
           className="w-full text-lg bg-transparent outline-none placeholder:text-muted py-2" />
-        <p className="text-[11px] text-muted mb-4">اكتب «اليوم/بكرة» للتاريخ، ‎!1-3‎ للأولوية{allowed.length > 1 ? "، ‎#دين #مالية #صحة‎ للمجال" : ""} · Enter للحفظ · Shift+Enter حفظ وإضافة أخرى</p>
+        <p className="hidden sm:block text-[11px] text-muted mb-4">اكتب «اليوم/بكرة» للتاريخ، ‎!1-3‎ للأولوية{allowed.length > 1 ? "، ‎#دين #مالية #صحة‎ للمجال" : ""} · Enter للحفظ · Shift+Enter حفظ وإضافة أخرى</p>
 
         <div className={cn("flex flex-wrap gap-1.5 mb-3", allowed.length < 2 && "hidden")}>
           {allowed.map((a) => (
@@ -66,7 +66,7 @@ export function QuickAdd() {
             {[{ l: "اليوم", v: today() }, { l: "بكرة", v: addDays(today(), 1) }].map((o) => (
               <button key={o.l} onClick={() => setDue(finalDue === o.v ? null : o.v)} className={cn("text-xs px-2 h-6 rounded-md", finalDue === o.v ? "bg-brand text-white" : "hover:bg-ink/5")}>{o.l}</button>
             ))}
-            <input type="date" value={finalDue ?? ""} onChange={(e) => setDue(e.target.value || null)} className="text-xs bg-transparent outline-none w-[110px]" />
+            <input type="date" value={finalDue ?? ""} onChange={(e) => setDue(e.target.value || null)} className="text-xs bg-transparent outline-none w-[120px]" />
           </div>
           <div className="flex items-center gap-1 rounded-xl border border-line px-2 h-9">
             <Flag size={15} className="text-muted" />
@@ -83,7 +83,7 @@ export function QuickAdd() {
               {Object.entries(RECURRENCE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
-          <select value={listId} onChange={(e) => setListId(e.target.value)} className="input h-9 w-auto text-xs">
+          <select value={listId} onChange={(e) => setListId(e.target.value)} className="input h-9 w-auto flex-1 sm:flex-none text-xs">
             <option value="">📥 صندوق الوارد</option>
             {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
