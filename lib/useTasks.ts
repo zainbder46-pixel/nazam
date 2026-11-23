@@ -18,6 +18,13 @@ export function useTasks(wsId: string | undefined, version = 0) {
 
   useEffect(() => { setLoading(true); load(); }, [load, version]);
 
+  // بعد «تراجع» نعيد تحميل المهام
+  useEffect(() => {
+    const on = () => load();
+    window.addEventListener("nz:refresh", on);
+    return () => window.removeEventListener("nz:refresh", on);
+  }, [load]);
+
   // تحديث لحظي: أي تعديل من عضو آخر يظهر مباشرة
   useEffect(() => {
     if (!wsId) return;
