@@ -10,6 +10,7 @@ import { useApp } from "./AppProvider";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { QuickAdd } from "./QuickAdd";
+import { ActionToast } from "./ActionToast";
 import type { Page } from "@/lib/types";
 
 const ALL_NAV = [
@@ -153,6 +154,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       )}
 
       <QuickAdd />
+      <ActionToast />
     </div>
   );
 }
