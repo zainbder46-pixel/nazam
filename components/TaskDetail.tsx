@@ -1,13 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Trash2, X, Plus } from "lucide-react";
+import { Trash2, X, Plus, MapPin, Bell, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { AREAS, PRIORITY, RECURRENCE, areasFor, cn } from "@/lib/utils";
 import { pushUndo } from "@/lib/undo";
 import type { Area, Member, Recurrence, Task, TaskList } from "@/lib/types";
 import { Drawer, AutoTextarea } from "./ui";
 import { Checkbox, completeTask } from "./TaskItem";
+import { useApp } from "./AppProvider";
+import type { Attendee } from "@/lib/types";
+
+export const REMIND = [
+  { v: null, l: "بوقتها" }, { v: 5, l: "قبل 5 دقائق" }, { v: 10, l: "قبل 10 دقائق" }, { v: 15, l: "قبل ربع ساعة" },
+  { v: 30, l: "قبل نص ساعة" }, { v: 60, l: "قبل ساعة" }, { v: 120, l: "قبل ساعتين" }, { v: 1440, l: "قبل يوم" },
+] as const;
+const RESP = { invited: "⏳", yes: "✅", no: "❌", maybe: "🤔" } as const;
 
 export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, canEdit, allTasks, onAdd, kind }: {
   task: Task | null; onClose: () => void; onChange: (id: string, p: Partial<Task>) => void;
@@ -18,7 +26,14 @@ export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, 
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [sub, setSub] = useState("");
-  useEffect(() => { setTitle(task?.title ?? ""); setNotes(task?.notes ?? ""); }, [task?.id]); // eslint-disable-line
+  const [loc, setLoc] = useState("");
+  const [att, setAtt] = useState<Attendee[]>([]);
+  const { userId } = useApp();
+  useEffect(() => { setTitle(task?.title ?? ""); setNotes(task?.notes ?? ""); setLoc(task?.location ?? ""); }, [task?.id]); // eslint-disable-line
+  useEffect(() => {
+    if (!task?.id) return;
+    supabase().from("task_attendees").select("*").eq("task_id", task.id).then(({ data }) => setAtt(data ?? []));
+  }, [task?.id]);
 
   if (!task) return <Drawer open={false} onClose={onClose}>{null}</Drawer>;
   const subs = allTasks.filter((t) => t.parent_id === task.id);
@@ -38,6 +53,25 @@ export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, 
     });
   };
 
+  const meeting = task.kind === "meeting";
+  const toggleAttendee = async (uid: string) => {
+    const has = att.find((a) => a.user_id === uid);
+    if (has) {
+      setAtt((c) => c.filter((a) => a.user_id !== uid));
+      await supabase().from("task_attendees").delete().eq("task_id", task.id).eq("user_id", uid);
+    } else {
+      const row: Attendee = { task_id: task.id, user_id: uid, workspace_id: task.workspace_id, response: uid === userId ? "yes" : "invited" };
+      setAtt((c) => [...c, row]);
+      await supabase().from("task_attendees").insert(row);
+    }
+  };
+  const respond = async (r: Attendee["response"]) => {
+    setAtt((c) => c.map((a) => (a.user_id === userId ? { ...a, response: r } : a)));
+    await supabase().from("task_attendees").update({ response: r }).eq("task_id", task.id).eq("user_id", userId);
+  };
+  const mine = att.find((a) => a.user_id === userId);
+  const memberName = (uid: string) => { const m = members.find((x) => x.user_id === uid); return m?.profile?.full_name || m?.profile?.email?.split("@")[0] || "عضو"; };
+
   const addSub = async () => {
     if (!sub.trim()) return;
     const { data } = await supabase().from("tasks").insert({
@@ -51,7 +85,7 @@ export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, 
     <Drawer open onClose={onClose}>
       <div className="p-5 space-y-5">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-muted">تفاصيل المهمة</span>
+          <span className="text-xs text-muted">{task.kind === "meeting" ? "تفاصيل الاجتماع" : "تفاصيل المهمة"}</span>
           <div className="flex gap-1">
             {canEdit && (
               <button className="icon-btn hover:text-red-600" onClick={async () => { await removeWithUndo(task); onClose(); }}>
@@ -60,6 +94,15 @@ export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, 
             )}
             <button className="icon-btn" onClick={onClose}><X size={16} /></button>
           </div>
+        </div>
+
+        <div className="inline-flex p-1 rounded-xl bg-ink/5 gap-1">
+          {(["task", "meeting"] as const).map((k) => (
+            <button key={k} disabled={!canEdit} onClick={() => patch(k === "meeting" ? { kind: k, remind_before: task.remind_before ?? 15 } : { kind: k })}
+              className={cn("px-3 h-8 rounded-lg text-sm", (task.kind ?? "task") === k ? "bg-surface shadow-soft font-medium" : "text-muted")}>
+              {k === "task" ? "📌 مهمة" : "📅 اجتماع"}
+            </button>
+          ))}
         </div>
 
         <div className="flex items-start gap-3">
@@ -93,6 +136,18 @@ export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, 
             <label className="label">الوقت</label>
             <input type="time" className="input" disabled={!canEdit} value={task.due_time?.slice(0, 5) ?? ""} onChange={(e) => patch({ due_time: e.target.value || null })} />
           </div>
+          {meeting && (
+            <div>
+              <label className="label">ينتهي</label>
+              <input type="time" className="input" disabled={!canEdit} value={task.end_time?.slice(0, 5) ?? ""} onChange={(e) => patch({ end_time: e.target.value || null })} />
+            </div>
+          )}
+          <div>
+            <label className="label flex items-center gap-1"><Bell size={12} /> التذكير</label>
+            <select className="input" disabled={!canEdit} value={task.remind_before ?? ""} onChange={(e) => patch({ remind_before: e.target.value ? Number(e.target.value) : null })}>
+              {REMIND.map((r) => <option key={r.l} value={r.v ?? ""}>{r.l}</option>)}
+            </select>
+          </div>
           <div>
             <label className="label">التكرار</label>
             <select className="input" disabled={!canEdit} value={task.recurrence} onChange={(e) => patch({ recurrence: e.target.value as Recurrence })}>
@@ -107,6 +162,45 @@ export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, 
             </select>
           </div>
         </div>
+
+        {!task.due_time && <p className="text-[11px] text-muted -mt-2">⏰ حدد وقت عشان يوصلك تذكير على الجوال</p>}
+
+        {meeting && (
+          <div className="space-y-3 rounded-2xl border border-line p-3">
+            <div>
+              <label className="label flex items-center gap-1"><MapPin size={12} /> المكان أو الرابط</label>
+              <input className="input" dir="auto" disabled={!canEdit} placeholder="مكتب رفد، أو رابط Zoom / Meet" value={loc}
+                onChange={(e) => setLoc(e.target.value)} onBlur={() => loc !== (task.location ?? "") && patch({ location: loc || null })} />
+              {/^https?:\/\//.test(task.location ?? "") && <a href={task.location!} target="_blank" rel="noreferrer" className="text-xs text-brand mt-1 inline-block">فتح الرابط ↗</a>}
+            </div>
+            <div>
+              <label className="label flex items-center gap-1"><Users size={12} /> المدعوين {att.length > 0 && `(${att.length})`}</label>
+              {members.length < 2 && <p className="text-xs text-muted">ادعُ أعضاء للمساحة من «المساحات» عشان تقدر تضيفهم للاجتماع</p>}
+              <div className="flex flex-wrap gap-1.5">
+                {members.map((m) => {
+                  const a = att.find((x) => x.user_id === m.user_id);
+                  return (
+                    <button key={m.user_id} disabled={!canEdit} onClick={() => toggleAttendee(m.user_id)}
+                      className={cn("chip h-8 px-3 text-xs border", a ? "bg-brand/10 border-brand/40 text-brand font-medium" : "border-line text-muted")}>
+                      {a ? RESP[a.response] : "+"} {memberName(m.user_id)}{m.user_id === userId ? " (أنا)" : ""}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted mt-1.5">كل مدعو يوصله إشعار بالدعوة، وتذكير قبل الاجتماع</p>
+            </div>
+            {mine && mine.user_id !== task.created_by && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted">حضورك:</span>
+                {(["yes", "maybe", "no"] as const).map((r) => (
+                  <button key={r} onClick={() => respond(r)} className={cn("chip h-8 px-3 border text-xs", mine.response === r ? "bg-ink text-bg border-transparent" : "border-line")}>
+                    {RESP[r]} {r === "yes" ? "حاضر" : r === "no" ? "معتذر" : "يمكن"}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div>
           <label className="label">الأولوية</label>
