@@ -34,11 +34,14 @@ export const useApp = () => {
 
 export function AppProvider({ userId, email, children }: { userId: string; email: string; children: React.ReactNode }) {
   const sb = supabase();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const boot = (() => { try { return JSON.parse(localStorage.getItem(`nz:boot:${userId}`) || "null"); } catch { return null; } })();
+  const [profile, setProfile] = useState<Profile | null>(boot?.profile ?? null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>(boot?.workspaces ?? []);
   const [wsId, setWsIdState] = useState<string | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
-  const [lists, setLists] = useState<TaskList[]>([]);
+  const [lists, setLists] = useState<TaskList[]>(() => {
+    try { const id = localStorage.getItem("ws"); return id ? JSON.parse(localStorage.getItem(`nz:lists:${id}`) || "[]") : []; } catch { return []; }
+  });
   const [invites, setInvites] = useState<Invite[]>([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [tasksVersion, setTasksVersion] = useState(0);
@@ -52,6 +55,7 @@ export function AppProvider({ userId, email, children }: { userId: string; email
       .map((r: any) => ({ ...r.workspaces, role: r.role }))
       .sort((a: Workspace, b: Workspace) => Number(b.is_personal) - Number(a.is_personal) || a.created_at.localeCompare(b.created_at));
     setWorkspaces(list);
+    try { const b = JSON.parse(localStorage.getItem(`nz:boot:${userId}`) || "{}"); localStorage.setItem(`nz:boot:${userId}`, JSON.stringify({ ...b, workspaces: list })); } catch {}
     setWsIdState((cur) => {
       const saved = cur ?? (typeof window !== "undefined" ? localStorage.getItem("ws") : null);
       if (saved && list.some((w) => w.id === saved)) return saved;
@@ -70,6 +74,7 @@ export function AppProvider({ userId, email, children }: { userId: string; email
     if (!wsId) return;
     const { data } = await sb.from("task_lists").select("*").eq("workspace_id", wsId).order("position");
     setLists(data ?? []);
+    try { localStorage.setItem(`nz:lists:${wsId}`, JSON.stringify(data ?? [])); } catch {}
   }, [sb, wsId]);
 
   const loadMembers = useCallback(async () => {
@@ -81,7 +86,10 @@ export function AppProvider({ userId, email, children }: { userId: string; email
   }, [sb, wsId]);
 
   useEffect(() => {
-    sb.from("profiles").select("*").eq("id", userId).single().then(({ data }) => setProfile(data));
+    sb.from("profiles").select("*").eq("id", userId).single().then(({ data }) => {
+      setProfile(data);
+      try { const b = JSON.parse(localStorage.getItem(`nz:boot:${userId}`) || "{}"); localStorage.setItem(`nz:boot:${userId}`, JSON.stringify({ ...b, profile: data })); } catch {}
+    });
     reloadWorkspaces();
     reloadInvites();
   }, [sb, userId, reloadWorkspaces, reloadInvites]);
@@ -89,6 +97,7 @@ export function AppProvider({ userId, email, children }: { userId: string; email
   useEffect(() => {
     if (!wsId) return;
     localStorage.setItem("ws", wsId);
+    try { const cached = localStorage.getItem(`nz:lists:${wsId}`); if (cached) setLists(JSON.parse(cached)); } catch {}
     reloadLists();
     loadMembers();
   }, [wsId, reloadLists, loadMembers]);
