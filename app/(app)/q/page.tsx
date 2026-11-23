@@ -49,15 +49,15 @@ export default function QuickExpense() {
     const sb = supabase();
     sb.from("fin_categories").select("*").eq("workspace_id", wsId).then(({ data }) => setCats(data ?? []));
     Promise.all([sb.from("fin_accounts").select("*").eq("workspace_id", wsId).order("position"), sb.from("fin_wallets").select("*").eq("workspace_id", wsId)]).then(([a, w]) => {
-      const list = ((a.data ?? []) as Account[]).map((x) => ({ ...x, w: (w.data ?? []).find((y: Wallet) => y.id === x.wallet_id) }));
+      const list = ((a.data ?? []) as Account[]).map((x) => ({ ...x, w: (w.data ?? []).find((y: Wallet) => y.id === x.wallet_id) })).filter((x) => x.w?.kind !== "custody");
       setAccs(list);
       setAcc((cur) => cur && list.some((x) => x.id === cur) ? cur : localStorage.getItem(`nz:acc:${wsId}`) && list.some((x) => x.id === localStorage.getItem(`nz:acc:${wsId}`)) ? localStorage.getItem(`nz:acc:${wsId}`) : list.find((x) => x.is_default)?.id ?? null);
     });
-    sb.from("transactions").select("category_id,amount,type,date").eq("workspace_id", wsId).gte("date", addDays(today(), -60)).then(({ data }) => {
+    sb.from("transactions").select("category_id,amount,type,date,nature").eq("workspace_id", wsId).gte("date", addDays(today(), -60)).then(({ data }) => {
       const u: Record<string, number> = {};
       (data ?? []).forEach((t: any) => { if (t.category_id) u[t.category_id] = (u[t.category_id] ?? 0) + 1; });
       setUsage(u);
-      setTodaySum((data ?? []).filter((t: any) => t.type === "expense" && t.date === today()).reduce((s: number, t: any) => s + Number(t.amount), 0));
+      setTodaySum((data ?? []).filter((t: any) => t.type === "expense" && !t.nature && t.date === today()).reduce((s: number, t: any) => s + Number(t.amount), 0));
     });
   }, [wsId, saved]);
 
