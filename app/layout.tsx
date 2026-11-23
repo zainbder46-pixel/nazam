@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "نظام — رتّب حياتك وعملك",
   description: "نظام شخصي ومشترك للمهام والصفحات والعبادات والمالية",
   icons: { icon: "/icon.svg" },
+  appleWebApp: { capable: true, title: "نظام", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = { themeColor: "#0f766e", width: "device-width", initialScale: 1 };
