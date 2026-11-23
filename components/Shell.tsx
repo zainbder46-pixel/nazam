@@ -36,7 +36,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
     supabase().from("pages").select("id,title,icon,is_favorite").eq("workspace_id", ws.id).is("parent_id", null)
       .order("is_favorite", { ascending: false }).order("position").limit(12)
       .then(({ data }) => setPages(data ?? []));
-  }, [ws, path]);
+    // نحدّث قائمة الصفحات لما تتغير المساحة أو تتنقل داخل قسم الصفحات فقط
+  }, [ws?.id, path.startsWith("/pages") ? path : ""]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleTheme = () => {
     const next = !dark; setDark(next);
@@ -137,7 +138,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="min-w-0 px-4 sm:px-6 lg:px-10 py-6 lg:py-8 pb-28 lg:pb-10 max-w-6xl w-full mx-auto">{children}</main>
+      <main className="min-w-0 px-4 sm:px-6 lg:px-10 py-5 lg:py-8 pb-36 lg:pb-10 max-w-6xl w-full mx-auto">{children}</main>
 
       {/* الجوال: شريط سفلي */}
       <nav className={cn("lg:hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur border-t border-line grid px-1 pb-[env(safe-area-inset-bottom)]", NAV.length === 6 ? "grid-cols-6" : "grid-cols-5")}>
@@ -148,8 +149,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
         ))}
       </nav>
       {canEdit && (
-        <button onClick={() => setQuickAddOpen(true)} className="lg:hidden fixed bottom-20 left-4 z-30 h-14 w-14 rounded-2xl bg-brand text-white shadow-xl flex items-center justify-center">
-          <Plus size={26} />
+        <button onClick={() => setQuickAddOpen(true)} aria-label="إضافة سريعة"
+          className="lg:hidden fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-4 z-30 h-12 w-12 rounded-full bg-brand text-white shadow-lg shadow-brand/30 flex items-center justify-center active:scale-95 transition">
+          <Plus size={24} />
         </button>
       )}
 
