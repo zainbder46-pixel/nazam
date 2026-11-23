@@ -21,7 +21,9 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await sb.auth.getUser();
+  // getClaims يتحقق من التوقيع محليًا (مفاتيح ECC) بدل رحلة لسيرفر Supabase مع كل صفحة
+  const { data } = await sb.auth.getClaims();
+  const user = data?.claims ?? null;
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC.some((p) => path.startsWith(p));
 
