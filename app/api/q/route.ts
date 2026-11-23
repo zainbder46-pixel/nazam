@@ -10,19 +10,24 @@ const txt = (s: string, status = 200) => new Response(s, { status, headers: { "c
 
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
-  const t = p.get("t") ?? "";
+  // يتجاهل أي رموز مخفية (اتجاه النص) تدخل مع اسم المتغير من كيبورد الآيفون
+  const get = (k: string) => { for (const [key, v] of p) if (key.replace(/[^a-z]/gi, "") === k) return v; return null; };
+  const t = (get("t") ?? "").replace(/[^a-f0-9]/gi, "");
   if (t.length < 20) return txt("⚠️ الرمز ناقص — انسخ الرابط من صفحة الصرفية", 401);
   const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { persistSession: false } });
 
-  if (p.has("cats")) {
+  if (get("cats") !== null) {
     const { data, error } = await sb.rpc("quick_cats", { p_token: t });
     if (error) return txt("⚠️ " + error.message, 500);
     return Response.json(data ?? [], { headers: { "cache-control": "no-store" } });
   }
 
-  const a = Number(toEn(p.get("a") ?? ""));
-  if (!a || a <= 0) return txt("⚠️ اكتب مبلغ صحيح", 400);
-  const { data, error } = await sb.rpc("quick_expense", { p_token: t, p_amount: a, p_category: p.get("c") || null, p_note: p.get("n") || null });
+  const a = Number(toEn(get("a") ?? ""));
+  if (!a || a <= 0) {
+    const got = [...p.entries()].filter(([k]) => k.replace(/[^a-z]/gi, "") !== "t").map(([k, v]) => `${k}=${v || "فاضي"}`).join(" ، ");
+    return txt(`⚠️ اكتب مبلغ صحيح\nوصلني: ${got || "ولا شي"}`, 400);
+  }
+  const { data, error } = await sb.rpc("quick_expense", { p_token: t, p_amount: a, p_category: get("c")?.trim() || null, p_note: get("n") || null });
   if (error) return txt(error.message.includes("bad token") ? "⚠️ الرمز غلط — انسخ الرابط من جديد" : "⚠️ ما انحفظت: " + error.message, 400);
   const d = data as { category: string; total: number; currency: string };
   return txt(`✅ ${a} ${d.currency}${d.category ? " · " + d.category : ""}\nمصروفك اليوم: ${Number(d.total)} ${d.currency}`);
