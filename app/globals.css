@@ -41,6 +41,6 @@ body { font-feature-settings: "ss01"; -webkit-font-smoothing: antialiased; }
 @keyframes pop { from { transform: scale(.96); opacity: 0 } to { transform: scale(1); opacity: 1 } }
 @keyframes rise { from { transform: translateY(8px); opacity: 0 } to { transform: none; opacity: 1 } }
 .anim-pop { animation: pop .16s ease-out; }
-.anim-rise { animation: rise .25s ease-out both; }
+.anim-rise { animation: rise .25s ease-out backwards; }
 @keyframes check { 0% { transform: scale(1) } 50% { transform: scale(1.25) } 100% { transform: scale(1) } }
 .anim-check { animation: check .25s ease-out; }
