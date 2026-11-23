@@ -4,13 +4,16 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  Sun, Moon, LayoutDashboard, ListTodo, FileText, HandHeart, Wallet, Users, Plus, LogOut, ChevronDown, Check, Bell, Star,
+  Sun, Moon, LayoutDashboard, ListTodo, FileText, HandHeart, Wallet, Users, Plus, LogOut, ChevronDown, Check, Bell, Star, MessageCircle,
 } from "lucide-react";
 import { useApp } from "./AppProvider";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { QuickAdd } from "./QuickAdd";
 import { ActionToast } from "./ActionToast";
+import { OfflineBanner } from "./OfflineBanner";
+import { clearOffline } from "@/lib/offline";
+import { useUnread } from "@/lib/useUnread";
 import type { Page } from "@/lib/types";
 
 const ALL_NAV = [
@@ -18,6 +21,7 @@ const ALL_NAV = [
   { href: "/tasks", label: "المهام", icon: ListTodo },
   { href: "/pages", label: "الصفحات", icon: FileText },
   { href: "/faith", label: "العبادات", icon: HandHeart, personalOnly: true },
+  { href: "/chat", label: "المحادثة", icon: MessageCircle, sharedOnly: true },
   { href: "/finance", label: "المالية", icon: Wallet },
   { href: "/spaces", label: "المساحات", icon: Users },
 ];
@@ -25,7 +29,8 @@ const ALL_NAV = [
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
-  const { profile, email, workspaces, ws, setWsId, invites, setQuickAddOpen, canEdit } = useApp();
+  const { profile, email, workspaces, ws, setWsId, invites, setQuickAddOpen, canEdit, userId } = useApp();
+  const unread = useUnread(ws && !ws.is_personal ? ws.id : null, userId, path.startsWith("/chat"));
   const [wsOpen, setWsOpen] = useState(false);
   const [dark, setDark] = useState(false);
   const [pages, setPages] = useState<Pick<Page, "id" | "title" | "icon" | "is_favorite">[]>([]);
@@ -44,16 +49,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
     document.documentElement.classList.toggle("dark", next);
     localStorage.setItem("theme", next ? "dark" : "light");
   };
-  const logout = async () => { await supabase().auth.signOut(); router.replace("/login"); router.refresh(); };
+  const logout = async () => { await clearOffline(); await supabase().auth.signOut(); router.replace("/login"); router.refresh(); };
   // العبادات تظهر في «حياتي» فقط — خاصة فيك وما تنعرض في أي مساحة ثانية
-  const NAV = ALL_NAV.filter((n) => !n.personalOnly || ws?.is_personal);
+  // المحادثة للمساحات المشتركة بدالها
+  const NAV = ALL_NAV.filter((n) => (!n.personalOnly || ws?.is_personal) && (!n.sharedOnly || (ws && !ws.is_personal)));
   const lifeSpaces = workspaces.filter((w) => w.kind === "life");
   const workSpaces = workspaces.filter((w) => w.kind !== "life");
   const kindLabel = !ws ? "" : ws.is_personal ? "حياتي · خاصة فيك" : `${ws.kind === "life" ? "حياة" : "عمل"} · ${ws.role === "owner" ? "مالك" : ws.role === "editor" ? "محرر" : "مشاهد"}`;
   const bare = path === "/q";
   const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
 
-  if (bare) return <>{children}<ActionToast /></>;
+  if (bare) return <>{children}<ActionToast /><OfflineBanner /></>;
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
@@ -100,6 +106,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               className={cn("flex items-center gap-3 rounded-xl px-3 h-10 text-sm transition", active(n.href) ? "bg-brand/10 text-brand font-semibold" : "text-ink/80 hover:bg-ink/5")}>
               <n.icon size={18} /> {n.label}
               {n.href === "/spaces" && invites.length > 0 && <span className="mr-auto chip bg-gold text-white">{invites.length}</span>}
+              {n.href === "/chat" && unread > 0 && <span className="mr-auto chip bg-brand text-white">{unread}</span>}
             </Link>
           ))}
         </nav>
@@ -146,12 +153,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {/* الجوال: شريط سفلي */}
       <nav className={cn("lg:hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur border-t border-line grid px-1 pb-[env(safe-area-inset-bottom)]", NAV.length === 6 ? "grid-cols-6" : "grid-cols-5")}>
         {NAV.map((n) => (
-          <Link key={n.href} href={n.href} className={cn("flex flex-col items-center gap-0.5 py-2 text-[10px]", active(n.href) ? "text-brand font-semibold" : "text-muted")}>
+          <Link key={n.href} href={n.href} className={cn("relative flex flex-col items-center gap-0.5 py-2 text-[10px]", active(n.href) ? "text-brand font-semibold" : "text-muted")}>
             <n.icon size={20} /> {n.label}
+            {n.href === "/chat" && unread > 0 && <span className="absolute top-1 left-1/2 ml-1.5 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">{unread > 9 ? "9+" : unread}</span>}
           </Link>
         ))}
       </nav>
-      {canEdit && (
+      {canEdit && !path.startsWith("/chat") && (
         <button onClick={() => setQuickAddOpen(true)} aria-label="إضافة سريعة"
           className="lg:hidden fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-4 z-30 h-12 w-12 rounded-full bg-brand text-white shadow-lg shadow-brand/30 flex items-center justify-center active:scale-95 transition">
           <Plus size={24} />
@@ -160,6 +168,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       <QuickAdd />
       <ActionToast />
+      <OfflineBanner />
     </div>
   );
 }
