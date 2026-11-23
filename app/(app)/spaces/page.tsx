@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, Crown, LogOut, Mail, Plus, Trash2, X } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
+import NotificationsCard from "@/components/NotificationsCard";
 import { Modal, PageHeader } from "@/components/ui";
 import { supabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,8 @@ export default function SpacesPage() {
           <div><label className="label">العملة</label><input className="input" defaultValue={profile?.currency ?? "ر.س"} onBlur={(e) => e.target.value && updateProfile({ currency: e.target.value })} /></div>
         </div>
       </section>
+
+      <NotificationsCard />
 
       <CreateSpace open={create} onClose={() => setCreate(false)} userId={userId} onCreated={async (id) => { await reloadWorkspaces(); setWsId(id); setSel(id); setCreate(false); }} />
     </div>
