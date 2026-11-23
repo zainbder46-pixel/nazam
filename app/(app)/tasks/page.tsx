@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Inbox, Sun, CalendarRange, ListChecks, CheckCircle2, Plus, LayoutList, Columns3, Trash2, Pencil } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Inbox, Sun, CalendarRange, ListChecks, CheckCircle2, Plus, LayoutList, Columns3, Trash2, Pencil, Users } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { useTasks } from "@/lib/useTasks";
 import { TaskItem } from "@/components/TaskItem";
@@ -12,11 +12,11 @@ import { AREAS, addDays, areasFor, cn, friendlyDate, today } from "@/lib/utils";
 import { pushUndo } from "@/lib/undo";
 import type { Area, Task, TaskList } from "@/lib/types";
 
-type View = "inbox" | "today" | "upcoming" | "all" | "done" | `list:${string}`;
+type View = "inbox" | "today" | "upcoming" | "meetings" | "all" | "done" | `list:${string}`;
 const COLORS = ["#0f766e", "#2563eb", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#b45309", "#475569"];
 
 export default function TasksPage() {
-  const { ws, lists, members, canEdit, tasksVersion, reloadLists, setQuickAddOpen } = useApp();
+  const { ws, lists, members, canEdit, tasksVersion, reloadLists, setQuickAddOpen, setWsId, workspaces } = useApp();
   const { tasks, loading, update, remove, add } = useTasks(ws?.id, tasksVersion);
   const [view, setView] = useState<View>("today");
   const [mode, setMode] = useState<"list" | "board">("list");
@@ -25,6 +25,19 @@ export default function TasksPage() {
   const [inline, setInline] = useState("");
   const [listModal, setListModal] = useState<TaskList | "new" | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+
+  // فتح مهمة من إشعار: /tasks?open=ID (ولو كانت في مساحة ثانية ننتقل لها)
+  const [openId, setOpenId] = useState<string | null>(null);
+  useEffect(() => { setOpenId(new URLSearchParams(location.search).get("open")); }, []);
+  useEffect(() => {
+    if (!openId || loading) return;
+    const t = tasks.find((x) => x.id === openId);
+    if (t) { setOpen(t); setOpenId(null); history.replaceState(null, "", "/tasks"); return; }
+    supabase().from("tasks").select("workspace_id").eq("id", openId).maybeSingle().then(({ data }) => {
+      if (data && data.workspace_id !== ws?.id && workspaces.some((w) => w.id === data.workspace_id)) setWsId(data.workspace_id);
+      else setOpenId(null);
+    });
+  }, [openId, loading, tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const t0 = today();
   const allowed = areasFor(ws?.kind);
@@ -37,6 +50,7 @@ export default function TasksPage() {
       case "inbox": return r.filter((t) => !t.list_id && t.status !== "done");
       case "today": return r.filter((t) => t.status !== "done" && t.due_date && t.due_date <= t0);
       case "upcoming": return r.filter((t) => t.status !== "done" && t.due_date && t.due_date > t0).sort((a, b) => a.due_date!.localeCompare(b.due_date!));
+      case "meetings": return r.filter((t) => t.kind === "meeting" && t.status !== "done").sort((a, b) => `${a.due_date ?? "9"} ${a.due_time ?? ""}`.localeCompare(`${b.due_date ?? "9"} ${b.due_time ?? ""}`));
       case "all": return r.filter((t) => t.status !== "done");
       case "done": return r.filter((t) => t.status === "done").sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? ""));
       default: return r.filter((t) => t.list_id === view.slice(5));
@@ -48,6 +62,17 @@ export default function TasksPage() {
     today: roots.filter((t) => t.status !== "done" && t.due_date && t.due_date <= t0).length,
     upcoming: roots.filter((t) => t.status !== "done" && t.due_date && t.due_date > t0).length,
     all: roots.filter((t) => t.status !== "done").length,
+    meetings: roots.filter((t) => t.kind === "meeting" && t.status !== "done").length,
+  };
+
+  const newMeeting = async () => {
+    if (!ws) return;
+    const d = new Date(); d.setHours(d.getHours() + 1, 0, 0, 0);
+    const { data } = await supabase().from("tasks").insert({
+      workspace_id: ws.id, title: "اجتماع جديد", kind: "meeting", due_date: today(), due_time: `${String(d.getHours()).padStart(2, "0")}:00`,
+      remind_before: 15, area: allowed.includes("work") ? "work" : allowed[0], position: Date.now(),
+    }).select().single();
+    if (data) { add(data); setOpen(data); setView("meetings"); }
   };
   const subCount = (id: string) => { const s = tasks.filter((t) => t.parent_id === id); return { done: s.filter((x) => x.status === "done").length, total: s.length }; };
 
@@ -89,14 +114,14 @@ export default function TasksPage() {
       status === "done" ? { title: t.title, recurring: false, next: null } : undefined);
   };
 
-  const currentTitle = view === "inbox" ? "صندوق الوارد" : view === "today" ? "اليوم" : view === "upcoming" ? "القادمة" : view === "all" ? "كل المهام" : view === "done" ? "المنجزة" : lists.find((l) => `list:${l.id}` === view)?.name ?? "";
+  const currentTitle = view === "inbox" ? "صندوق الوارد" : view === "today" ? "اليوم" : view === "upcoming" ? "القادمة" : view === "meetings" ? "الاجتماعات" : view === "all" ? "كل المهام" : view === "done" ? "المنجزة" : lists.find((l) => `list:${l.id}` === view)?.name ?? "";
 
   // تجميع القائمة
   const groups: { key: string; label: string; items: Task[] }[] = useMemo(() => {
-    if (view === "upcoming") {
+    if (view === "upcoming" || view === "meetings") {
       const m = new Map<string, Task[]>();
-      filtered.forEach((t) => m.set(t.due_date!, [...(m.get(t.due_date!) ?? []), t]));
-      return [...m.entries()].map(([k, v]) => ({ key: k, label: friendlyDate(k), items: v }));
+      filtered.forEach((t) => { const k = t.due_date ?? ""; m.set(k, [...(m.get(k) ?? []), t]); });
+      return [...m.entries()].map(([k, v]) => ({ key: k || "none", label: k ? friendlyDate(k) : "بدون موعد", items: v }));
     }
     if (view === "today") {
       const over = filtered.filter((t) => t.due_date! < t0);
@@ -117,6 +142,7 @@ export default function TasksPage() {
       <PageHeader title="المهام" subtitle={!ws ? "" : ws.is_personal ? "مهامك الشخصية — خاصة فيك" : `${ws.kind === "work" ? "💼" : "🌿"} ${ws.name}`}
         actions={<>
           <Segmented value={mode} onChange={setMode} options={[{ value: "list", label: <LayoutList size={16} /> }, { value: "board", label: <Columns3 size={16} /> }]} />
+          {canEdit && <button className="btn-outline" onClick={newMeeting}>📅 اجتماع</button>}
           {canEdit && <button className="btn-primary" onClick={() => setQuickAddOpen(true)}><Plus size={16} /> مهمة</button>}
         </>} />
 
@@ -127,6 +153,7 @@ export default function TasksPage() {
             ["inbox", "صندوق الوارد", Inbox, counts.inbox],
             ["today", "اليوم", Sun, counts.today],
             ["upcoming", "القادمة", CalendarRange, counts.upcoming],
+            ["meetings", "الاجتماعات", Users, counts.meetings],
             ["all", "الكل", ListChecks, counts.all],
             ["done", "المنجزة", CheckCircle2, 0],
           ] as const).map(([v, l, Icon, c]) => (
