@@ -4,9 +4,20 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "./supabase/client";
 import type { Task } from "./types";
 
+// كاش بسيط بين الصفحات: نعرض آخر نسخة فورًا ونحدّثها بالخلفية
+const cache = new Map<string, Task[]>();
+
 export function useTasks(wsId: string | undefined, version = 0) {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tasks, setTasksState] = useState<Task[]>(() => (wsId && cache.get(wsId)) || []);
+  const [loading, setLoading] = useState(() => !(wsId && cache.has(wsId)));
+
+  const setTasks = useCallback((next: Task[] | ((cur: Task[]) => Task[])) => {
+    setTasksState((cur) => {
+      const v = typeof next === "function" ? (next as (c: Task[]) => Task[])(cur) : next;
+      if (wsId) cache.set(wsId, v);
+      return v;
+    });
+  }, [wsId]);
 
   const load = useCallback(async () => {
     if (!wsId) return;
@@ -14,9 +25,12 @@ export function useTasks(wsId: string | undefined, version = 0) {
       .order("position", { ascending: true }).limit(3000);
     setTasks(data ?? []);
     setLoading(false);
-  }, [wsId]);
+  }, [wsId, setTasks]);
 
-  useEffect(() => { setLoading(true); load(); }, [load, version]);
+  useEffect(() => {
+    if (wsId && cache.has(wsId)) { setTasksState(cache.get(wsId)!); setLoading(false); } else setLoading(true);
+    load();
+  }, [load, version]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // بعد «تراجع» نعيد تحميل المهام
   useEffect(() => {
