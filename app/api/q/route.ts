@@ -1,0 +1,29 @@
+import { createClient } from "@supabase/supabase-js";
+
+// اختصار الآيفون: يسجّل الصرفية بدون فتح الموقع
+//   GET /api/q?t=TOKEN&cats=1             → قائمة الفئات (JSON) لـ «اختيار من القائمة»
+//   GET /api/q?t=TOKEN&a=25&c=مطاعم&n=...  → يسجّل ويرجع نص للإشعار
+export const dynamic = "force-dynamic";
+
+const toEn = (s: string) => s.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[٫,]/g, ".").replace(/[^\d.]/g, "");
+const txt = (s: string, status = 200) => new Response(s, { status, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+
+export async function GET(req: Request) {
+  const p = new URL(req.url).searchParams;
+  const t = p.get("t") ?? "";
+  if (t.length < 20) return txt("⚠️ الرمز ناقص — انسخ الرابط من صفحة الصرفية", 401);
+  const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { persistSession: false } });
+
+  if (p.has("cats")) {
+    const { data, error } = await sb.rpc("quick_cats", { p_token: t });
+    if (error) return txt("⚠️ " + error.message, 500);
+    return Response.json(data ?? [], { headers: { "cache-control": "no-store" } });
+  }
+
+  const a = Number(toEn(p.get("a") ?? ""));
+  if (!a || a <= 0) return txt("⚠️ اكتب مبلغ صحيح", 400);
+  const { data, error } = await sb.rpc("quick_expense", { p_token: t, p_amount: a, p_category: p.get("c") || null, p_note: p.get("n") || null });
+  if (error) return txt(error.message.includes("bad token") ? "⚠️ الرمز غلط — انسخ الرابط من جديد" : "⚠️ ما انحفظت: " + error.message, 400);
+  const d = data as { category: string; total: number; currency: string };
+  return txt(`✅ ${a} ${d.currency}${d.category ? " · " + d.category : ""}\nمصروفك اليوم: ${Number(d.total)} ${d.currency}`);
+}
