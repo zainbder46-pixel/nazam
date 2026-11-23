@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Trash2, X, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { AREAS, PRIORITY, RECURRENCE, areasFor, cn } from "@/lib/utils";
+import { pushUndo } from "@/lib/undo";
 import type { Area, Member, Recurrence, Task, TaskList } from "@/lib/types";
 import { Drawer, AutoTextarea } from "./ui";
 import { Checkbox, completeTask } from "./TaskItem";
@@ -27,6 +28,16 @@ export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, 
     await supabase().from("tasks").update(p).eq("id", task.id);
   };
 
+  // حذف مع إمكانية التراجع: نحتفظ بنسخة من المهمة ومهامها الفرعية ونرجعها لو طلب
+  const removeWithUndo = async (t: Task) => {
+    const kids = allTasks.filter((x) => x.parent_id === t.id);
+    await supabase().from("tasks").delete().eq("id", t.id);
+    onDelete(t.id);
+    pushUndo(`حذفت «${t.title}»`, async () => {
+      await supabase().from("tasks").insert([t, ...kids]);
+    });
+  };
+
   const addSub = async () => {
     if (!sub.trim()) return;
     const { data } = await supabase().from("tasks").insert({
@@ -43,7 +54,7 @@ export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, 
           <span className="text-xs text-muted">تفاصيل المهمة</span>
           <div className="flex gap-1">
             {canEdit && (
-              <button className="icon-btn hover:text-red-600" onClick={async () => { await supabase().from("tasks").delete().eq("id", task.id); onDelete(task.id); onClose(); }}>
+              <button className="icon-btn hover:text-red-600" onClick={async () => { await removeWithUndo(task); onClose(); }}>
                 <Trash2 size={16} />
               </button>
             )}
@@ -53,7 +64,7 @@ export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, 
 
         <div className="flex items-start gap-3">
           <div className="pt-1.5">
-            <Checkbox checked={task.status === "done"} disabled={!canEdit} onClick={async () => onChange(task.id, await completeTask(task))} />
+            <Checkbox checked={task.status === "done"} disabled={!canEdit} onClick={async (o) => onChange(task.id, await completeTask(task, o))} />
           </div>
           <AutoTextarea value={title} disabled={!canEdit} onChange={(e) => setTitle(e.target.value)}
             onBlur={() => title.trim() && title !== task.title && patch({ title: title.trim() })}
@@ -131,9 +142,9 @@ export function TaskDetail({ task, onClose, onChange, onDelete, lists, members, 
           <div className="space-y-1">
             {subs.map((s) => (
               <div key={s.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-ink/[.03]">
-                <Checkbox checked={s.status === "done"} disabled={!canEdit} onClick={async () => onChange(s.id, await completeTask(s))} />
+                <Checkbox checked={s.status === "done"} disabled={!canEdit} onClick={async (o) => onChange(s.id, await completeTask(s, o))} />
                 <span className={cn("text-sm flex-1", s.status === "done" && "line-through text-muted")}>{s.title}</span>
-                {canEdit && <button className="icon-btn h-6 w-6" onClick={async () => { await supabase().from("tasks").delete().eq("id", s.id); onDelete(s.id); }}><X size={12} /></button>}
+                {canEdit && <button className="icon-btn h-6 w-6" onClick={() => removeWithUndo(s)}><X size={12} /></button>}
               </div>
             ))}
             {canEdit && (
