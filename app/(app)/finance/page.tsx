@@ -7,28 +7,45 @@ import { useApp } from "@/components/AppProvider";
 import { Empty, Modal, PageHeader, Progress, Segmented } from "@/components/ui";
 import { supabase } from "@/lib/supabase/client";
 import { cn, friendlyDate, money, parseYmd, today, ymd } from "@/lib/utils";
-import type { Category, Goal, Obligation, Transaction } from "@/lib/types";
+import type { Account, Category, Goal, Obligation, Transaction, Wallet } from "@/lib/types";
+import { AccountSelect, TxRow, Wallets } from "@/components/Wallets";
 
-type Tab = "overview" | "budget" | "obligations" | "goals";
+type Tab = "wallets" | "overview" | "budget" | "obligations" | "goals";
 
 export default function FinancePage() {
   const { profile, ws, canEdit } = useApp();
   const cur = profile?.currency ?? "ر.س";
   const wsId = ws?.id ?? "";
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>("wallets");
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [cats, setCats] = useState<Category[]>([]);
   const [tx, setTx] = useState<Transaction[]>([]);
   const [obl, setObl] = useState<Obligation[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
 
   const from = ymd(month), to = ymd(new Date(month.getFullYear(), month.getMonth() + 1, 0));
   const loadTx = () => wsId && supabase().from("transactions").select("*").eq("workspace_id", wsId).gte("date", from).lte("date", to).order("date", { ascending: false }).order("created_at", { ascending: false }).then(({ data }) => setTx(data ?? []));
   const loadCats = () => wsId && supabase().from("fin_categories").select("*").eq("workspace_id", wsId).order("created_at").then(({ data }) => setCats(data ?? []));
   const loadObl = () => wsId && supabase().from("obligations").select("*").eq("workspace_id", wsId).eq("active", true).order("created_at").then(({ data }) => setObl(data ?? []));
   const loadGoals = () => wsId && supabase().from("savings_goals").select("*").eq("workspace_id", wsId).order("created_at").then(({ data }) => setGoals(data ?? []));
-  useEffect(() => { loadCats(); loadObl(); loadGoals(); }, [wsId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const loadWallets = async () => {
+    if (!wsId) return;
+    const sb = supabase();
+    const [w, a, b] = await Promise.all([
+      sb.from("fin_wallets").select("*").eq("workspace_id", wsId).eq("archived", false).order("position").order("created_at"),
+      sb.from("fin_accounts").select("*").eq("workspace_id", wsId).order("position").order("created_at"),
+      sb.from("fin_account_balances").select("account_id,balance").eq("workspace_id", wsId),
+    ]);
+    const bal = new Map((b.data ?? []).map((x: { account_id: string; balance: number }) => [x.account_id, Number(x.balance)]));
+    setWallets(w.data ?? []);
+    setAccounts(((a.data ?? []) as Account[]).map((x) => ({ ...x, balance: bal.get(x.id) ?? Number(x.opening_balance) })));
+  };
+  const reloadMoney = () => { loadTx(); loadWallets(); };
+  useEffect(() => { loadCats(); loadObl(); loadGoals(); loadWallets(); }, [wsId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { loadTx(); }, [from, wsId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const on = () => reloadMoney(); window.addEventListener("nz:refresh", on); return () => window.removeEventListener("nz:refresh", on); }); // eslint-disable-line react-hooks/exhaustive-deps
 
   const income = tx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const expense = tx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
@@ -37,10 +54,10 @@ export default function FinancePage() {
   return (
     <div>
       <PageHeader title="المالية" subtitle={ws ? `${ws.icon} مالية «${ws.name}» — منفصلة عن باقي المساحات${ws.is_personal ? " وخاصة فيك" : ""}` : ""} actions={
-        <Segmented value={tab} onChange={setTab} options={[{ value: "overview", label: "نظرة عامة" }, { value: "budget", label: "الميزانية" }, { value: "obligations", label: "الالتزامات" }, { value: "goals", label: "الادخار" }]} />
+        <Segmented value={tab} onChange={setTab} options={[{ value: "wallets", label: "المحافظ" }, { value: "overview", label: "العمليات" }, { value: "budget", label: "الميزانية" }, { value: "obligations", label: "الالتزامات" }, { value: "goals", label: "الادخار" }]} />
       } />
 
-      {(tab === "overview" || tab === "budget") && (
+      {(tab === "overview" || tab === "budget" || tab === "wallets") && (
         <div className="flex items-center gap-2 mb-5">
           <button className="icon-btn" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}><ChevronRight size={18} /></button>
           <span className="font-semibold min-w-[120px] text-center">{monthLabel}</span>
@@ -49,7 +66,8 @@ export default function FinancePage() {
       )}
 
       {!canEdit && <p className="card px-4 py-3 mb-5 text-sm text-muted">👀 صلاحيتك في هذي المساحة مشاهدة فقط</p>}
-      {tab === "overview" && <Overview cats={cats} tx={tx} income={income} expense={expense} cur={cur} reload={loadTx} month={month} wsId={wsId} />}
+      {tab === "wallets" && <Wallets wallets={wallets} accounts={accounts} tx={tx} cats={cats} cur={cur} wsId={wsId} canEdit={canEdit} reload={reloadMoney} />}
+      {tab === "overview" && <Overview cats={cats} tx={tx} cur={cur} reload={reloadMoney} month={month} wsId={wsId} wallets={wallets} accounts={accounts} />}
       {tab === "budget" && <Budget cats={cats} tx={tx} cur={cur} reload={loadCats} wsId={wsId} />}
       {tab === "obligations" && <Obligations items={obl} cur={cur} reload={loadObl} cats={cats} wsId={wsId} />}
       {tab === "goals" && <Goals items={goals} cur={cur} reload={loadGoals} wsId={wsId} />}
@@ -58,8 +76,20 @@ export default function FinancePage() {
 }
 
 /* ---------------- نظرة عامة + إضافة عملية ---------------- */
-function Overview({ cats, tx, income, expense, cur, reload, month, wsId }: { cats: Category[]; tx: Transaction[]; income: number; expense: number; cur: string; reload: () => void; month: Date; wsId: string }) {
+function Overview({ cats, tx: allTx, cur, reload, month, wsId, wallets, accounts }: { cats: Category[]; tx: Transaction[]; cur: string; reload: () => void; month: Date; wsId: string; wallets: Wallet[]; accounts: Account[] }) {
   const [type, setType] = useState<"expense" | "income">("expense");
+  const [wf, setWf] = useState("all");
+  const [acc, setAcc] = useState("");
+  // الحساب الافتراضي أو آخر حساب استخدمته
+  useEffect(() => {
+    if (acc || !accounts.length) return;
+    const last = typeof window !== "undefined" ? localStorage.getItem(`nz:acc:${wsId}`) : null;
+    setAcc(accounts.find((a) => a.id === last)?.id ?? accounts.find((a) => a.is_default)?.id ?? "");
+  }, [accounts]); // eslint-disable-line react-hooks/exhaustive-deps
+  const wAccs = new Set(accounts.filter((a) => a.wallet_id === wf).map((a) => a.id));
+  const tx = wf === "all" ? allTx : allTx.filter((t) => wAccs.has(t.account_id ?? "") || wAccs.has(t.to_account_id ?? ""));
+  const income = tx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
+  const expense = tx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const [amount, setAmount] = useState("");
   const [cat, setCat] = useState("");
   const [note, setNote] = useState("");
@@ -70,7 +100,8 @@ function Overview({ cats, tx, income, expense, cur, reload, month, wsId }: { cat
 
   const add = async () => {
     const n = Number(amount); if (!n || n <= 0) return;
-    await supabase().from("transactions").insert({ workspace_id: wsId, type, amount: n, category_id: cat || null, note: note || null, date });
+    await supabase().from("transactions").insert({ workspace_id: wsId, type, amount: n, category_id: cat || null, note: note || null, date, account_id: acc || null });
+    if (acc) localStorage.setItem(`nz:acc:${wsId}`, acc);
     setAmount(""); setNote(""); reload();
   };
 
@@ -88,6 +119,14 @@ function Overview({ cats, tx, income, expense, cur, reload, month, wsId }: { cat
 
   return (
     <div className="space-y-6">
+      {wallets.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4">
+          <button onClick={() => setWf("all")} className={cn("chip h-8 px-3 text-xs border shrink-0", wf === "all" ? "bg-ink text-bg border-transparent" : "border-line text-muted")}>كل المحافظ</button>
+          {wallets.map((w) => (
+            <button key={w.id} onClick={() => setWf(w.id)} className={cn("chip h-8 px-3 text-xs border shrink-0", wf === w.id ? "text-white border-transparent" : "border-line text-muted")} style={wf === w.id ? { background: w.color } : {}}>{w.icon} {w.name}</button>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
         {[
           { l: "الدخل", v: income, icon: TrendingUp, c: "text-green-600", bg: "bg-green-500/10" },
@@ -108,6 +147,7 @@ function Overview({ cats, tx, income, expense, cur, reload, month, wsId }: { cat
           <select className="input w-auto" value={cat} onChange={(e) => setCat(e.target.value)}>
             {typeCats.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
           </select>
+          {accounts.length > 0 && <AccountSelect accounts={accounts} wallets={wallets} value={acc} onChange={setAcc} />}
           <input className="input flex-1 min-w-[140px]" placeholder="وش هو؟" value={note} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
           <input type="date" className="input w-auto" value={date} onChange={(e) => setDate(e.target.value)} />
           <button className="btn-primary" onClick={add}><Plus size={16} /> إضافة</button>
@@ -161,20 +201,10 @@ function Overview({ cats, tx, income, expense, cur, reload, month, wsId }: { cat
             <h3 className="font-semibold px-3 pt-3 pb-2">العمليات ({tx.length})</h3>
             <div className="max-h-[360px] overflow-y-auto">
               {tx.length === 0 && <Empty icon="🧾" title="ما فيه عمليات" />}
-              {tx.map((t) => {
-                const c = cats.find((x) => x.id === t.category_id);
-                return (
-                  <div key={t.id} className="group flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-ink/[.03]">
-                    <span className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: (c?.color ?? "#94a3b8") + "1a" }}>{c?.icon ?? "💳"}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">{t.note || c?.name || "—"}</p>
-                      <p className="text-[11px] text-muted">{c?.name} · {friendlyDate(t.date)}</p>
-                    </div>
-                    <span className={cn("font-semibold text-sm", t.type === "income" ? "text-green-600" : "")}>{t.type === "income" ? "+" : "−"}{money(Number(t.amount), cur)}</span>
-                    <button className="icon-btn h-7 w-7 opacity-0 group-hover:opacity-100" onClick={async () => { await supabase().from("transactions").delete().eq("id", t.id); reload(); }}><Trash2 size={13} /></button>
-                  </div>
-                );
-              })}
+              {tx.map((t) => (
+                <TxRow key={t.id} t={t} cats={cats} accounts={accounts} wallets={wallets} cur={cur} focus={wf === "all" ? undefined : wAccs}
+                  onDelete={async () => { await supabase().from("transactions").delete().eq("id", t.id); reload(); }} />
+              ))}
             </div>
           </section>
         </div>
