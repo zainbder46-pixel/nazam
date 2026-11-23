@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 247 246 242;
+  --surface: 255 255 255;
+  --line: 228 226 219;
+  --ink: 28 30 33;
+  --muted: 112 115 120;
+  --brand: 15 118 110;
+  --gold: 180 132 46;
+}
+.dark {
+  --bg: 15 17 19;
+  --surface: 24 26 29;
+  --line: 44 47 52;
+  --ink: 236 236 232;
+  --muted: 150 153 158;
+  --brand: 45 180 165;
+  --gold: 214 170 90;
+}
+
+html, body { background: rgb(var(--bg)); color: rgb(var(--ink)); }
+body { font-feature-settings: "ss01"; -webkit-font-smoothing: antialiased; }
+* { scrollbar-width: thin; scrollbar-color: rgb(var(--line)) transparent; }
+::selection { background: rgb(var(--brand) / .2); }
+
+@layer components {
+  .card { @apply bg-surface border border-line rounded-2xl shadow-soft; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-3.5 h-10 text-sm font-medium transition active:scale-[.98] disabled:opacity-50 disabled:pointer-events-none; }
+  .btn-primary { @apply btn bg-brand text-white hover:brightness-110; }
+  .btn-ghost { @apply btn hover:bg-ink/5 text-ink; }
+  .btn-outline { @apply btn border border-line hover:bg-ink/5; }
+  .input { @apply w-full h-10 rounded-xl border border-line bg-surface px-3 text-sm outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10 placeholder:text-muted; }
+  .label { @apply block text-xs font-medium text-muted mb-1.5; }
+  .chip { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium; }
+  .icon-btn { @apply inline-flex items-center justify-center h-8 w-8 rounded-lg text-muted hover:bg-ink/5 hover:text-ink transition; }
+}
+
+@keyframes pop { from { transform: scale(.96); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+@keyframes rise { from { transform: translateY(8px); opacity: 0 } to { transform: none; opacity: 1 } }
+.anim-pop { animation: pop .16s ease-out; }
+.anim-rise { animation: rise .25s ease-out both; }
+@keyframes check { 0% { transform: scale(1) } 50% { transform: scale(1.25) } 100% { transform: scale(1) } }
+.anim-check { animation: check .25s ease-out; }
