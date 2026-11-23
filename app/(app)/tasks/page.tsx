@@ -122,7 +122,7 @@ export default function TasksPage() {
 
       <div className="grid lg:grid-cols-[220px_1fr] gap-6">
         {/* القوائم */}
-        <div className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible -mx-4 px-4 lg:mx-0 lg:px-0 pb-2 lg:pb-0">
+        <div className="flex lg:flex-col gap-1 overflow-x-auto no-scrollbar lg:overflow-visible -mx-4 px-4 lg:mx-0 lg:px-0 pb-2 lg:pb-0">
           {([
             ["inbox", "صندوق الوارد", Inbox, counts.inbox],
             ["today", "اليوم", Sun, counts.today],
