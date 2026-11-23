@@ -32,11 +32,15 @@ body { font-feature-settings: "ss01"; -webkit-font-smoothing: antialiased; }
   .btn-primary { @apply btn bg-brand text-white hover:brightness-110; }
   .btn-ghost { @apply btn hover:bg-ink/5 text-ink; }
   .btn-outline { @apply btn border border-line hover:bg-ink/5; }
-  .input { @apply w-full h-10 rounded-xl border border-line bg-surface px-3 text-sm outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10 placeholder:text-muted; }
+  .input { @apply w-full h-10 rounded-xl border border-line bg-surface px-3 text-base sm:text-sm outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10 placeholder:text-muted; }
   .label { @apply block text-xs font-medium text-muted mb-1.5; }
   .chip { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium; }
   .icon-btn { @apply inline-flex items-center justify-center h-8 w-8 rounded-lg text-muted hover:bg-ink/5 hover:text-ink transition; }
 }
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+@media (max-width: 639px) { input, select, textarea { font-size: 16px; } }
 
 @keyframes pop { from { transform: scale(.96); opacity: 0 } to { transform: scale(1); opacity: 1 } }
 @keyframes rise { from { transform: translateY(8px); opacity: 0 } to { transform: none; opacity: 1 } }
