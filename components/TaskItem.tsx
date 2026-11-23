@@ -67,7 +67,8 @@ export function TaskItem({ task, members, onChange, onOpen, canEdit, showArea = 
             if (task.status !== "done") {
               // نخلي المهمة تتلوّن وتنشطب لحظة قبل ما تختفي أو تنتقل لموعدها الجاي
               setCelebrating(true);
-              const [p] = await Promise.all([completeTask(task, origin), new Promise((r) => setTimeout(r, 900))]);
+              await new Promise((r) => setTimeout(r, 750));
+              const p = await completeTask(task, origin);
               setCelebrating(false);
               onChange(task.id, p);
             } else {
