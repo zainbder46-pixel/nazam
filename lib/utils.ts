@@ -61,6 +61,10 @@ export const AREAS: Record<Area, { label: string; color: string; icon: string }>
   health: { label: "الصحة", color: "#dc2626", icon: "💪" },
 };
 
+/** مجالات المهام حسب نوع المساحة: العمل له مجال واحد، والحياة لها مجالاتها */
+export const areasFor = (kind?: "life" | "work"): Area[] =>
+  kind === "work" ? ["work"] : ["life", "faith", "finance", "study", "health"];
+
 export const RECURRENCE: Record<Recurrence, string> = {
   none: "بدون تكرار", daily: "يوميًا", weekdays: "أيام العمل (أحد–خميس)",
   weekly: "أسبوعيًا", monthly: "شهريًا", yearly: "سنويًا",
