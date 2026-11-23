@@ -85,6 +85,7 @@ export function TaskItem({ task, members, onChange, onOpen, canEdit, showArea = 
               <CalendarDays size={11} /> {friendlyDate(task.due_date)}{task.due_time ? ` ${task.due_time.slice(0, 5)}` : ""}
             </span>
           )}
+          {task.kind === "meeting" && <span className="chip bg-violet-500/10 text-violet-600">📅 اجتماع{task.location ? ` · ${task.location.startsWith("http") ? "أونلاين" : task.location}` : ""}</span>}
           {task.recurrence !== "none" && <span className="chip bg-ink/5 text-muted"><Repeat size={11} /></span>}
           {showArea && <span className="chip" style={{ background: AREAS[task.area].color + "18", color: AREAS[task.area].color }}>{AREAS[task.area].icon} {AREAS[task.area].label}</span>}
           {subCount && subCount.total > 0 && <span className="chip bg-ink/5 text-muted">{subCount.done}/{subCount.total}</span>}
