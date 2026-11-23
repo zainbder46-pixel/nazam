@@ -33,8 +33,8 @@ export default function TodayPage() {
     if (!ws) return;
     const sb = supabase();
     Promise.all([
-      sb.from("transactions").select("amount,type").eq("workspace_id", ws.id).gte("date", monthStart()).lte("date", monthEnd()),
-      sb.from("fin_categories").select("monthly_budget").eq("workspace_id", ws.id).eq("type", "expense"),
+      sb.from("transactions").select("amount,type,nature").eq("workspace_id", ws.id).is("nature", null).gte("date", monthStart()).lte("date", monthEnd()),
+      sb.from("fin_categories").select("monthly_budget").eq("workspace_id", ws.id).eq("type", "expense").neq("kind", "debt"),
     ]).then(([tx, cats]) => {
       const rows = tx.data ?? [];
       setFin({
