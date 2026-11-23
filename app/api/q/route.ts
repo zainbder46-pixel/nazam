@@ -31,6 +31,6 @@ export async function GET(req: Request) {
   }
   const { data, error } = await sb.rpc("quick_expense", { p_token: t, p_amount: a, p_category: get("c")?.replace(/=+$/, "").trim() || null, p_note: get("n") || null });
   if (error) return txt(error.message.includes("bad token") ? "⚠️ الرمز غلط — انسخ الرابط من جديد" : "⚠️ ما انحفظت: " + error.message, 400);
-  const d = data as { category: string; total: number; currency: string };
-  return txt(`✅ ${a} ${d.currency}${d.category ? " · " + d.category : ""}\nمصروفك اليوم: ${Number(d.total)} ${d.currency}`);
+  const d = data as { category: string; total: number; currency: string; account?: string };
+  return txt(`✅ ${a} ${d.currency}${d.category ? " · " + d.category : ""}${d.account ? "\n👛 " + d.account : ""}\nمصروفك اليوم: ${Number(d.total)} ${d.currency}`);
 }
