@@ -26,8 +26,8 @@ export default function SpacesPage() {
 
   return (
     <div>
-      <PageHeader title="المساحات" subtitle="مساحتك الشخصية + مساحات مشتركة مع فريقك أو أهلك"
-        actions={<button className="btn-primary" onClick={() => setCreate(true)}><Plus size={16} /> مساحة مشتركة</button>} />
+      <PageHeader title="المساحات" subtitle="«حياتي» خاصة فيك، ومساحات العمل منفصلة لكل مشروع أو فريق بصلاحياتها"
+        actions={<button className="btn-primary" onClick={() => setCreate(true)}><Plus size={16} /> مساحة جديدة</button>} />
 
       {invites.length > 0 && (
         <section className="card p-4 mb-6 border-gold/40 bg-gold/5">
@@ -51,7 +51,7 @@ export default function SpacesPage() {
             <button key={w.id} onClick={() => setSel(w.id)}
               className={cn("w-full flex items-center gap-3 rounded-2xl border p-3 text-right transition", selected?.id === w.id ? "bg-surface border-brand/40 shadow-soft" : "border-line hover:bg-ink/[.03]")}>
               <span className="h-10 w-10 rounded-xl flex items-center justify-center text-xl" style={{ background: w.color + "22" }}>{w.icon}</span>
-              <div className="flex-1 min-w-0"><p className="font-medium truncate">{w.name}</p><p className="text-[11px] text-muted">{w.is_personal ? "شخصية · خاصة بك" : ROLES[w.role ?? "viewer"]}</p></div>
+              <div className="flex-1 min-w-0"><p className="font-medium truncate">{w.name}</p><p className="text-[11px] text-muted">{w.is_personal ? "🌿 حياتي · خاصة فيك" : `${w.kind === "life" ? "🌿 حياة" : "💼 عمل"} · ${ROLES[w.role ?? "viewer"]}`}</p></div>
               {ws?.id === w.id && <span className="chip bg-brand/10 text-brand">الحالية</span>}
             </button>
           ))}
@@ -120,7 +120,7 @@ function SpaceDetail({ w, userId, onSwitch, isCurrent, onChanged, onGone }: {
           <div className="flex-1 min-w-[160px]">
             {isOwner ? <input className="text-xl font-bold bg-transparent outline-none w-full" defaultValue={w.name} onBlur={(e) => e.target.value !== w.name && e.target.value && rename({ name: e.target.value })} />
               : <p className="text-xl font-bold">{w.name}</p>}
-            <p className="text-xs text-muted">{w.is_personal ? "مساحتك الخاصة — ما يشوفها أحد غيرك" : `${members.length} عضو`}</p>
+            <p className="text-xs text-muted">{w.is_personal ? "مساحتك الخاصة — مهامك وعباداتك ومصاريفك، ما يشوفها أحد غيرك" : `${w.kind === "life" ? "🌿 حياة" : "💼 عمل"} · ${members.length} عضو · مهامها وصفحاتها وماليتها خاصة بأعضائها`}</p>
           </div>
           {!isCurrent && <button className="btn-primary" onClick={onSwitch}>انتقل لها</button>}
         </div>
@@ -156,7 +156,7 @@ function SpaceDetail({ w, userId, onSwitch, isCurrent, onChanged, onGone }: {
           {isOwner && (
             <section className="card p-5">
               <h3 className="font-semibold mb-1">دعوة شخص</h3>
-              <p className="text-xs text-muted mb-3">المحرر يضيف ويعدّل المهام والصفحات، والمشاهد يقرأ فقط. العبادات والمالية تبقى خاصة بكل شخص.</p>
+              <p className="text-xs text-muted mb-3">المحرر يضيف ويعدّل المهام والصفحات والمالية في هذي المساحة، والمشاهد يقرأ فقط. «حياتي» وعباداتك ما تنشارك أبدًا.</p>
               <div className="flex flex-wrap gap-2">
                 <div className="relative flex-1 min-w-[200px]"><Mail size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted" /><input className="input pr-9" dir="ltr" type="email" placeholder="email@example.com" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && invite()} /></div>
                 <select className="input w-auto" value={role} onChange={(e) => setRole(e.target.value as Role)}><option value="editor">محرر</option><option value="viewer">مشاهد</option></select>
@@ -194,7 +194,8 @@ function SpaceDetail({ w, userId, onSwitch, isCurrent, onChanged, onGone }: {
 function CreateSpace({ open, onClose, userId, onCreated }: { open: boolean; onClose: () => void; userId: string; onCreated: (id: string) => void }) {
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("🏢");
-  const [color, setColor] = useState(COLORS[0]);
+  const [color, setColor] = useState(COLORS[1]);
+  const [kind, setKind] = useState<"work" | "life">("work");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -202,15 +203,22 @@ function CreateSpace({ open, onClose, userId, onCreated }: { open: boolean; onCl
     if (!name.trim()) return;
     setBusy(true); setErr(null);
     const sb = supabase();
-    const { data, error } = await sb.from("workspaces").insert({ name: name.trim(), icon, color, owner_id: userId }).select("id").single();
+    const { data, error } = await sb.from("workspaces").insert({ name: name.trim(), icon, color, kind, owner_id: userId }).select("id").single();
     if (error || !data) { setErr(error?.message ?? "صار خطأ"); setBusy(false); return; }
-    await sb.from("task_lists").insert([{ workspace_id: data.id, name: "عام", color, position: 0 }]);
     setBusy(false); setName(""); onCreated(data.id);
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="مساحة مشتركة جديدة">
+    <Modal open={open} onClose={onClose} title="مساحة جديدة">
       <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-2">
+          {([["work", "💼 عمل", "مشروع، شركة، عميل، فريق"], ["life", "🌿 حياة", "العائلة، البيت، رحلة"]] as const).map(([k, l, h]) => (
+            <button key={k} onClick={() => { setKind(k); setIcon(k === "work" ? "🏢" : "👨‍👩‍👧"); setColor(k === "work" ? COLORS[1] : COLORS[0]); }}
+              className={cn("rounded-2xl border p-3 text-right transition", kind === k ? "border-brand bg-brand/10" : "border-line hover:bg-ink/5")}>
+              <p className="font-semibold text-sm">{l}</p><p className="text-[11px] text-muted mt-0.5">{h}</p>
+            </button>
+          ))}
+        </div>
         <input className="input" autoFocus placeholder="مثال: فريق رفد، KOVA، العائلة" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} />
         <div className="flex flex-wrap gap-1">{ICONS.map((i) => <button key={i} onClick={() => setIcon(i)} className={cn("h-9 w-9 rounded-lg text-lg", icon === i ? "bg-brand/15 ring-2 ring-brand" : "hover:bg-ink/5")}>{i}</button>)}</div>
         <div className="flex gap-2">{COLORS.map((c) => <button key={c} onClick={() => setColor(c)} className={cn("h-7 w-7 rounded-full", color === c && "ring-4 ring-offset-2 ring-offset-surface")} style={{ background: c, ["--tw-ring-color" as any]: c + "55" }} />)}</div>
