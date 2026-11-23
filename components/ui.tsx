@@ -15,8 +15,8 @@ export function Modal({ open, onClose, title, children, wide }: {
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 pt-[10vh] sm:pt-4 bg-black/30 backdrop-blur-[2px]" onMouseDown={onClose}>
-      <div className={cn("card w-full anim-pop max-h-[85vh] overflow-auto", wide ? "max-w-2xl" : "max-w-md")} onMouseDown={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/30 backdrop-blur-[2px]" onMouseDown={onClose}>
+      <div className={cn("card w-full anim-pop max-h-[88vh] overflow-auto rounded-b-none sm:rounded-2xl pb-[env(safe-area-inset-bottom)]", wide ? "sm:max-w-2xl" : "sm:max-w-md")} onMouseDown={(e) => e.stopPropagation()}>
         {title && (
           <div className="flex items-center justify-between px-5 pt-4 pb-2">
             <h3 className="font-semibold">{title}</h3>
@@ -85,11 +85,11 @@ export function Empty({ icon, title, hint, action }: { icon: string; title: stri
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
-      <div>
+      <div className="min-w-0">
         <h1 className="text-2xl font-bold">{title}</h1>
         {subtitle && <p className="text-sm text-muted mt-1">{subtitle}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex items-center gap-2 max-w-full">{actions}</div>}
     </div>
   );
 }
@@ -98,10 +98,10 @@ export function Segmented<T extends string>({ value, onChange, options }: {
   value: T; onChange: (v: T) => void; options: { value: T; label: React.ReactNode }[];
 }) {
   return (
-    <div className="inline-flex p-1 rounded-xl bg-ink/5 gap-1">
+    <div className="inline-flex max-w-full overflow-x-auto no-scrollbar p-1 rounded-xl bg-ink/5 gap-1">
       {options.map((o) => (
         <button key={o.value} onClick={() => onChange(o.value)}
-          className={cn("px-3 h-8 rounded-lg text-sm transition", value === o.value ? "bg-surface shadow-soft font-medium" : "text-muted hover:text-ink")}>
+          className={cn("shrink-0 whitespace-nowrap px-3 h-8 rounded-lg text-sm transition", value === o.value ? "bg-surface shadow-soft font-medium" : "text-muted hover:text-ink")}>
           {o.label}
         </button>
       ))}
