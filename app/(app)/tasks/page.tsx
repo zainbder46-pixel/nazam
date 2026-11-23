@@ -70,7 +70,7 @@ export default function TasksPage() {
     const d = new Date(); d.setHours(d.getHours() + 1, 0, 0, 0);
     const { data } = await supabase().from("tasks").insert({
       workspace_id: ws.id, title: "اجتماع جديد", kind: "meeting", due_date: today(), due_time: `${String(d.getHours()).padStart(2, "0")}:00`,
-      remind_before: 15, area: allowed.includes("work") ? "work" : allowed[0], position: Date.now(),
+      remind_before: 15, area: allowed.includes("work") ? "work" : allowed.includes("life") ? "life" : allowed[0], position: Date.now(),
     }).select().single();
     if (data) { add(data); setOpen(data); setView("meetings"); }
   };
