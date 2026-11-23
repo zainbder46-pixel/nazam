@@ -7,7 +7,8 @@ import { useApp } from "@/components/AppProvider";
 import { supabase } from "@/lib/supabase/client";
 import { pushUndo } from "@/lib/undo";
 import { addDays, cn, money, today } from "@/lib/utils";
-import type { Category } from "@/lib/types";
+import type { Account, Category, Wallet } from "@/lib/types";
+import { ACC } from "@/components/Wallets";
 
 /** صرفية سريعة — تفتح من اختصار «النقر على الخلف» في الآيفون: /q أو /q?amount=25 */
 export default function QuickExpense() {
@@ -20,6 +21,8 @@ export default function QuickExpense() {
   const [cats, setCats] = useState<Category[]>([]);
   const [usage, setUsage] = useState<Record<string, number>>({});
   const [cat, setCat] = useState<string | null>(null);
+  const [accs, setAccs] = useState<(Account & { w?: Wallet })[]>([]);
+  const [acc, setAcc] = useState<string | null>(null);
   const [date, setDate] = useState(today());
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ amount: number; cat?: Category } | null>(null);
@@ -45,6 +48,11 @@ export default function QuickExpense() {
     if (!wsId) return;
     const sb = supabase();
     sb.from("fin_categories").select("*").eq("workspace_id", wsId).then(({ data }) => setCats(data ?? []));
+    Promise.all([sb.from("fin_accounts").select("*").eq("workspace_id", wsId).order("position"), sb.from("fin_wallets").select("*").eq("workspace_id", wsId)]).then(([a, w]) => {
+      const list = ((a.data ?? []) as Account[]).map((x) => ({ ...x, w: (w.data ?? []).find((y: Wallet) => y.id === x.wallet_id) }));
+      setAccs(list);
+      setAcc((cur) => cur && list.some((x) => x.id === cur) ? cur : localStorage.getItem(`nz:acc:${wsId}`) && list.some((x) => x.id === localStorage.getItem(`nz:acc:${wsId}`)) ? localStorage.getItem(`nz:acc:${wsId}`) : list.find((x) => x.is_default)?.id ?? null);
+    });
     sb.from("transactions").select("category_id,amount,type,date").eq("workspace_id", wsId).gte("date", addDays(today(), -60)).then(({ data }) => {
       const u: Record<string, number> = {};
       (data ?? []).forEach((t: any) => { if (t.category_id) u[t.category_id] = (u[t.category_id] ?? 0) + 1; });
@@ -61,9 +69,10 @@ export default function QuickExpense() {
     if (!wsId || !n || n <= 0 || saving) return;
     setSaving(true);
     const { data } = await supabase().from("transactions")
-      .insert({ workspace_id: wsId, type, amount: n, category_id: cat, note: note.trim() || null, date })
+      .insert({ workspace_id: wsId, type, amount: n, category_id: cat, note: note.trim() || null, date, account_id: acc })
       .select("id").single();
     setSaving(false);
+    if (acc) localStorage.setItem(`nz:acc:${wsId}`, acc);
     const c = cats.find((x) => x.id === cat);
     if (data?.id) {
       pushUndo(`سجّلت ${type === "expense" ? "صرفية" : "دخل"} ${money(n, cur)}`, async () => {
@@ -125,6 +134,17 @@ export default function QuickExpense() {
             </button>
           ))}
         </div>
+
+        {accs.length > 0 && (
+          <div className="mt-5 flex gap-2 overflow-x-auto no-scrollbar -mx-5 px-5 pb-1">
+            {accs.map((a) => (
+              <button key={a.id} onClick={() => setAcc(a.id)}
+                className={cn("shrink-0 h-9 px-3 rounded-xl border text-xs", acc === a.id ? "bg-ink text-bg border-transparent font-semibold" : "border-line text-muted")}>
+                {a.w?.icon} {a.w?.name} · {ACC[a.type].i} {a.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         <input value={note} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()}
           placeholder="وش هو؟ (اختياري)" className="input h-12 mt-6 text-center" />
