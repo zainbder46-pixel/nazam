@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, X } from "lucide-react";
+import { Check, Copy, X, Zap } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { supabase } from "@/lib/supabase/client";
 import { pushUndo } from "@/lib/undo";
@@ -139,6 +139,47 @@ export default function QuickExpense() {
       <button onClick={save} disabled={!n || n <= 0 || saving || !wsId} className="btn-primary h-14 text-lg rounded-2xl w-full">
         {saving ? "يحفظ..." : `حفظ ${n > 0 ? money(n, cur) : ""}`}
       </button>
+      <ShortcutLinks />
+    </div>
+  );
+}
+
+/** روابط اختصار الآيفون اللي يسجّل بدون ما يفتح الموقع */
+function ShortcutLinks() {
+  const [token, setToken] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const show = async () => {
+    setOpen((o) => !o);
+    if (!token) {
+      const { data } = await supabase().rpc("get_quick_token");
+      if (data) setToken(data as string);
+    }
+  };
+  const base = token ? `${location.origin}/api/q?t=${token}` : "";
+  const links = [
+    { k: "cats", l: "١- رابط الفئات", v: `${base}&cats=1` },
+    { k: "save", l: "٢- رابط الحفظ", v: `${base}&c=` },
+  ];
+  const copy = async (k: string, v: string) => {
+    try { await navigator.clipboard.writeText(v); setCopied(k); setTimeout(() => setCopied(null), 1500); } catch {}
+  };
+  return (
+    <div className="mt-3 text-center">
+      <button onClick={show} className="inline-flex items-center gap-1 text-xs text-muted"><Zap size={13} /> سجّل من الآيفون بدون فتح الموقع</button>
+      {open && (
+        <div className="mt-2 space-y-2 text-start">
+          {!token && <p className="text-xs text-muted text-center">يجهّز...</p>}
+          {token && links.map((x) => (
+            <button key={x.k} onClick={() => copy(x.k, x.v)} className="w-full flex items-center gap-2 rounded-xl border border-line px-3 h-11 text-sm">
+              <span className="font-semibold">{x.l}</span>
+              <span className="flex-1 truncate text-xs text-muted" dir="ltr">{x.v}</span>
+              {copied === x.k ? <Check size={16} className="text-brand" /> : <Copy size={16} className="text-muted" />}
+            </button>
+          ))}
+          {token && <p className="text-[11px] text-muted text-center">الرابط فيه رمزك الخاص، لا ترسله لأحد</p>}
+        </div>
+      )}
     </div>
   );
 }
