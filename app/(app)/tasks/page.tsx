@@ -9,6 +9,7 @@ import { TaskDetail } from "@/components/TaskDetail";
 import { Empty, Modal, PageHeader, Segmented, Spinner } from "@/components/ui";
 import { supabase } from "@/lib/supabase/client";
 import { AREAS, addDays, areasFor, cn, friendlyDate, today } from "@/lib/utils";
+import { pushUndo } from "@/lib/undo";
 import type { Area, Task, TaskList } from "@/lib/types";
 
 type View = "inbox" | "today" | "upcoming" | "all" | "done" | `list:${string}`;
@@ -64,16 +65,28 @@ export default function TasksPage() {
   const deleteList = async (l: TaskList) => {
     const n = roots.filter((t) => t.list_id === l.id).length;
     if (!confirm(`حذف قائمة «${l.name}»؟${n ? `\n${n} مهمة فيها بتنتقل لصندوق الوارد.` : ""}`)) return;
+    const ids = tasks.filter((t) => t.list_id === l.id).map((t) => t.id);
     await supabase().from("task_lists").delete().eq("id", l.id);
     if (view === `list:${l.id}`) setView("inbox");
     await reloadLists();
-    tasks.filter((t) => t.list_id === l.id).forEach((t) => update(t.id, { list_id: null }));
+    ids.forEach((id) => update(id, { list_id: null }));
+    pushUndo(`حذفت قائمة «${l.name}»`, async () => {
+      const sb = supabase();
+      await sb.from("task_lists").insert({ id: l.id, workspace_id: l.workspace_id, name: l.name, color: l.color, position: l.position });
+      if (ids.length) await sb.from("tasks").update({ list_id: l.id }).in("id", ids);
+    });
   };
 
   const moveStatus = async (id: string, status: Task["status"]) => {
+    const t = tasks.find((x) => x.id === id);
+    if (!t || t.status === status) return;
+    const prev = { status: t.status, completed_at: t.completed_at };
     const p = { status, completed_at: status === "done" ? new Date().toISOString() : null };
     update(id, p);
     await supabase().from("tasks").update(p).eq("id", id);
+    const label = status === "done" ? "منجزة" : status === "doing" ? "قيد العمل" : "للتنفيذ";
+    pushUndo(`نقلت «${t.title}» إلى ${label}`, async () => { await supabase().from("tasks").update(prev).eq("id", id); },
+      status === "done" ? { title: t.title, recurring: false, next: null } : undefined);
   };
 
   const currentTitle = view === "inbox" ? "صندوق الوارد" : view === "today" ? "اليوم" : view === "upcoming" ? "القادمة" : view === "all" ? "كل المهام" : view === "done" ? "المنجزة" : lists.find((l) => `list:${l.id}` === view)?.name ?? "";
