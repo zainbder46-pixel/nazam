@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Inbox, Sun, CalendarRange, ListChecks, CheckCircle2, Plus, LayoutList, Columns3, Trash2, Pencil, Users } from "lucide-react";
+import { Inbox, Sun, AlarmClock, CalendarRange, ListChecks, CheckCircle2, Plus, LayoutList, Columns3, Trash2, Pencil, Users } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { useTasks } from "@/lib/useTasks";
 import { TaskItem } from "@/components/TaskItem";
@@ -12,7 +12,7 @@ import { AREAS, addDays, areasFor, cn, friendlyDate, today } from "@/lib/utils";
 import { pushUndo } from "@/lib/undo";
 import type { Area, Task, TaskList } from "@/lib/types";
 
-type View = "inbox" | "today" | "upcoming" | "meetings" | "all" | "done" | `list:${string}`;
+type View = "inbox" | "today" | "overdue" | "upcoming" | "meetings" | "all" | "done" | `list:${string}`;
 const COLORS = ["#0f766e", "#2563eb", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#b45309", "#475569"];
 
 export default function TasksPage() {
@@ -21,6 +21,8 @@ export default function TasksPage() {
   const [view, setView] = useState<View>("today");
   const [mode, setMode] = useState<"list" | "board">("list");
   const [area, setArea] = useState<Area | "all">("all");
+  // فلتر القروب / العميل (= القائمة): "all" الكل، "none" بدون قروب، أو id القائمة
+  const [grp, setGrp] = useState<string>("all");
   const [open, setOpen] = useState<Task | null>(null);
   const [inline, setInline] = useState("");
   const [listModal, setListModal] = useState<TaskList | "new" | null>(null);
@@ -45,21 +47,24 @@ export default function TasksPage() {
   const filtered = useMemo(() => {
     let r = roots;
     if (area !== "all") r = r.filter((t) => t.area === area);
+    if (grp !== "all" && !view.startsWith("list:")) r = r.filter((t) => (grp === "none" ? !t.list_id : t.list_id === grp));
     if (mode === "board") return view.startsWith("list:") ? r.filter((t) => t.list_id === view.slice(5)) : r.filter((t) => t.status !== "done" || (t.completed_at ?? "") > addDays(t0, -7));
     switch (view) {
       case "inbox": return r.filter((t) => !t.list_id && t.status !== "done");
       case "today": return r.filter((t) => t.status !== "done" && t.due_date && t.due_date <= t0);
+      case "overdue": return r.filter((t) => t.status !== "done" && t.due_date && t.due_date < t0).sort((a, b) => a.due_date!.localeCompare(b.due_date!) || b.priority - a.priority);
       case "upcoming": return r.filter((t) => t.status !== "done" && t.due_date && t.due_date > t0).sort((a, b) => a.due_date!.localeCompare(b.due_date!));
       case "meetings": return r.filter((t) => t.kind === "meeting" && t.status !== "done").sort((a, b) => `${a.due_date ?? "9"} ${a.due_time ?? ""}`.localeCompare(`${b.due_date ?? "9"} ${b.due_time ?? ""}`));
       case "all": return r.filter((t) => t.status !== "done");
       case "done": return r.filter((t) => t.status === "done").sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? ""));
       default: return r.filter((t) => t.list_id === view.slice(5));
     }
-  }, [roots, view, area, mode, t0]);
+  }, [roots, view, area, grp, mode, t0]);
 
   const counts = {
     inbox: roots.filter((t) => !t.list_id && t.status !== "done").length,
     today: roots.filter((t) => t.status !== "done" && t.due_date && t.due_date <= t0).length,
+    overdue: roots.filter((t) => t.status !== "done" && t.due_date && t.due_date < t0).length,
     upcoming: roots.filter((t) => t.status !== "done" && t.due_date && t.due_date > t0).length,
     all: roots.filter((t) => t.status !== "done").length,
     meetings: roots.filter((t) => t.kind === "meeting" && t.status !== "done").length,
@@ -78,8 +83,8 @@ export default function TasksPage() {
 
   const addInline = async () => {
     if (!ws || !inline.trim()) return;
-    const listId = view.startsWith("list:") ? view.slice(5) : null;
-    const due = view === "today" ? t0 : view === "upcoming" ? addDays(t0, 1) : null;
+    const listId = view.startsWith("list:") ? view.slice(5) : grp !== "all" && grp !== "none" ? grp : null;
+    const due = view === "today" || view === "overdue" ? t0 : view === "upcoming" ? addDays(t0, 1) : null;
     const { data } = await supabase().from("tasks").insert({
       workspace_id: ws.id, title: inline.trim(), list_id: listId, due_date: due, area: area === "all" ? allowed[0] : area, position: Date.now(),
     }).select().single();
@@ -114,7 +119,7 @@ export default function TasksPage() {
       status === "done" ? { title: t.title, recurring: false, next: null } : undefined);
   };
 
-  const currentTitle = view === "inbox" ? "صندوق الوارد" : view === "today" ? "اليوم" : view === "upcoming" ? "القادمة" : view === "meetings" ? "الاجتماعات" : view === "all" ? "كل المهام" : view === "done" ? "المنجزة" : lists.find((l) => `list:${l.id}` === view)?.name ?? "";
+  const currentTitle = view === "inbox" ? "صندوق الوارد" : view === "today" ? "اليوم" : view === "overdue" ? "المتأخرة" : view === "upcoming" ? "القادمة" : view === "meetings" ? "الاجتماعات" : view === "all" ? "كل المهام" : view === "done" ? "المنجزة" : lists.find((l) => `list:${l.id}` === view)?.name ?? "";
 
   // تجميع القائمة
   const groups: { key: string; label: string; items: Task[] }[] = useMemo(() => {
@@ -122,6 +127,13 @@ export default function TasksPage() {
       const m = new Map<string, Task[]>();
       filtered.forEach((t) => { const k = t.due_date ?? ""; m.set(k, [...(m.get(k) ?? []), t]); });
       return [...m.entries()].map(([k, v]) => ({ key: k || "none", label: k ? friendlyDate(k) : "بدون موعد", items: v }));
+    }
+    if (view === "overdue") {
+      // المتأخرة مقسّمة حسب القروب / العميل
+      const m = new Map<string, Task[]>();
+      filtered.forEach((t) => { const k = t.list_id ?? ""; m.set(k, [...(m.get(k) ?? []), t]); });
+      return [...m.entries()].map(([k, v]) => ({ key: k || "none", label: lists.find((l) => l.id === k)?.name ?? "بدون قروب", items: v }))
+        .sort((a, b) => b.items.length - a.items.length);
     }
     if (view === "today") {
       const over = filtered.filter((t) => t.due_date! < t0);
@@ -135,7 +147,7 @@ export default function TasksPage() {
       ].filter((g) => g.items.length);
     }
     return [{ key: "x", label: "", items: filtered }];
-  }, [filtered, view, t0]);
+  }, [filtered, view, t0, lists]);
 
   return (
     <div>
@@ -152,14 +164,15 @@ export default function TasksPage() {
           {([
             ["inbox", "صندوق الوارد", Inbox, counts.inbox],
             ["today", "اليوم", Sun, counts.today],
+            ["overdue", "المتأخرة", AlarmClock, counts.overdue],
             ["upcoming", "القادمة", CalendarRange, counts.upcoming],
             ["meetings", "الاجتماعات", Users, counts.meetings],
             ["all", "الكل", ListChecks, counts.all],
             ["done", "المنجزة", CheckCircle2, 0],
           ] as const).map(([v, l, Icon, c]) => (
             <button key={v} onClick={() => setView(v)} className={cn("shrink-0 flex items-center gap-2.5 rounded-xl px-3 h-9 text-sm transition", view === v ? "bg-surface shadow-soft border border-line font-semibold" : "text-ink/70 hover:bg-ink/5")}>
-              <Icon size={16} className={view === v ? "text-brand" : ""} /> {l}
-              {c > 0 && <span className="mr-auto text-xs text-muted">{c}</span>}
+              <Icon size={16} className={view === v ? (v === "overdue" ? "text-red-600" : "text-brand") : v === "overdue" && c > 0 ? "text-red-600" : ""} /> {l}
+              {c > 0 && <span className={cn("mr-auto text-xs", v === "overdue" ? "text-red-600 font-semibold" : "text-muted")}>{c}</span>}
             </button>
           ))}
           <div className="hidden lg:flex items-center justify-between px-3 mt-4 mb-1">
@@ -193,6 +206,28 @@ export default function TasksPage() {
             ))}
           </div>
 
+          {/* فلتر القروب / العميل */}
+          {!view.startsWith("list:") && lists.length > 0 && (() => {
+            const base = roots.filter((t) => t.status !== "done" && (area === "all" || t.area === area)
+              && (view !== "overdue" || (t.due_date && t.due_date < t0)) && (view !== "today" || (t.due_date && t.due_date <= t0)));
+            const n = (id: string | null) => base.filter((t) => (t.list_id ?? null) === id).length;
+            const none = n(null);
+            return (
+              <div className="flex gap-1.5 mb-4 overflow-x-auto no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 lg:flex-wrap">
+                <span className="shrink-0 self-center text-[11px] font-semibold text-muted ml-1">القروب / العميل:</span>
+                <button onClick={() => setGrp("all")} className={cn("shrink-0 chip h-7 px-3 text-xs border", grp === "all" ? "bg-ink text-bg border-transparent" : "border-line text-muted")}>الكل</button>
+                {lists.map((l) => (
+                  <button key={l.id} onClick={() => setGrp(grp === l.id ? "all" : l.id)} className={cn("shrink-0 chip h-7 px-3 text-xs border", grp === l.id ? "text-white border-transparent" : "border-line text-ink/70")}
+                    style={grp === l.id ? { background: l.color } : {}}>
+                    <span className="h-2 w-2 rounded-full" style={{ background: grp === l.id ? "#fff" : l.color }} /> {l.name}
+                    {n(l.id) > 0 && <span className="opacity-70">{n(l.id)}</span>}
+                  </button>
+                ))}
+                {none > 0 && <button onClick={() => setGrp(grp === "none" ? "all" : "none")} className={cn("shrink-0 chip h-7 px-3 text-xs border", grp === "none" ? "bg-ink text-bg border-transparent" : "border-line text-muted")}>بدون قروب <span className="opacity-70">{none}</span></button>}
+              </div>
+            );
+          })()}
+
           {loading ? <Spinner /> : mode === "list" ? (
             <div className="card p-2">
               <h2 className="px-3 pt-2 pb-1 font-semibold">{currentTitle}</h2>
@@ -204,12 +239,12 @@ export default function TasksPage() {
                 </div>
               )}
               {groups.length === 0 || filtered.length === 0 ? (
-                <Empty icon={view === "today" ? "🌤️" : "✨"} title={view === "today" ? "يومك فاضي" : "ما فيه مهام هنا"} hint={view === "today" ? "استمتع، أو أضف شي تنجزه" : undefined} />
+                <Empty icon={view === "today" ? "🌤️" : view === "overdue" ? "👏" : "✨"} title={view === "today" ? "يومك فاضي" : view === "overdue" ? "ما عندك شي متأخر" : "ما فيه مهام هنا"} hint={view === "today" ? "استمتع، أو أضف شي تنجزه" : undefined} />
               ) : groups.map((g) => (
                 <div key={g.key} className="mb-2">
-                  {g.label && <p className={cn("px-3 pt-3 pb-1 text-xs font-semibold", g.label === "متأخرة" ? "text-red-600" : "text-muted")}>{g.label} · {g.items.length}</p>}
+                  {g.label && <p className={cn("px-3 pt-3 pb-1 text-xs font-semibold", g.label === "متأخرة" || view === "overdue" ? "text-red-600" : "text-muted")}>{g.label} · {g.items.length}</p>}
                   {g.items.map((t) => (
-                    <TaskItem key={t.id} task={t} members={members} canEdit={canEdit} onChange={update} onOpen={setOpen} subCount={subCount(t.id)} showArea={area === "all" && allowed.length > 1} />
+                    <TaskItem key={t.id} task={t} members={members} canEdit={canEdit} onChange={update} onOpen={setOpen} subCount={subCount(t.id)} showArea={area === "all" && allowed.length > 1} group={grp === "all" && view !== "overdue" && !view.startsWith("list:") ? lists.find((l) => l.id === t.list_id) : null} />
                   ))}
                 </div>
               ))}
