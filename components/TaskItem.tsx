@@ -46,8 +46,8 @@ export function Checkbox({ checked, color, onClick, disabled }: { checked: boole
   );
 }
 
-export function TaskItem({ task, members, onChange, onOpen, canEdit, showArea = true, subCount }: {
-  task: Task; members?: Member[]; onChange: (id: string, patch: Partial<Task>) => void;
+export function TaskItem({ task, members, onChange, onOpen, canEdit, showArea = true, subCount, group }: {
+  task: Task; members?: Member[]; group?: { name: string; color: string } | null; onChange: (id: string, patch: Partial<Task>) => void;
   onOpen?: (t: Task) => void; canEdit: boolean; showArea?: boolean; subCount?: { done: number; total: number };
 }) {
   const [busy, setBusy] = useState(false);
@@ -85,6 +85,7 @@ export function TaskItem({ task, members, onChange, onOpen, canEdit, showArea = 
               <CalendarDays size={11} /> {friendlyDate(task.due_date)}{task.due_time ? ` ${task.due_time.slice(0, 5)}` : ""}
             </span>
           )}
+          {group && <span className="chip" style={{ background: group.color + "18", color: group.color }}><span className="h-1.5 w-1.5 rounded-full" style={{ background: group.color }} /> {group.name}</span>}
           {task.kind === "meeting" && <span className="chip bg-violet-500/10 text-violet-600">📅 اجتماع{task.location ? ` · ${task.location.startsWith("http") ? "أونلاين" : task.location}` : ""}</span>}
           {task.recurrence !== "none" && <span className="chip bg-ink/5 text-muted"><Repeat size={11} /></span>}
           {showArea && <span className="chip" style={{ background: AREAS[task.area].color + "18", color: AREAS[task.area].color }}>{AREAS[task.area].icon} {AREAS[task.area].label}</span>}
